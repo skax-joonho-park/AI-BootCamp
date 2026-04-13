@@ -57,8 +57,8 @@ def rerank_hits(
         role_boost = 0.15 if _is_role_relevant(f"{source} {content}", role_hint) else 0.0
         category_boost = 0.08 if lowered_categories and category in lowered_categories else 0.0
         lexical_boost = 0.05 if any(token in content.lower() for token in query_tokens) else 0.0
-        # Prioritize uploaded JD as first-class evidence for gap analysis.
-        upload_boost = 0.12 if source_type == "jd_upload" else (0.08 if source_type == "resume_upload" else 0.0)
+        # Prioritize uploaded reference law as first-class evidence for gap analysis.
+        upload_boost = 0.12 if source_type == "reference_upload" else (0.08 if source_type == "contract_upload" else 0.0)
 
         raw_new_score = base_score + role_boost + category_boost + lexical_boost + upload_boost
         # Keep post-rerank score scale in 0~1 so threshold semantics stay stable.

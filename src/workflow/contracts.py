@@ -15,9 +15,9 @@ STRUCTURED_OUTPUT_FALLBACK_STRATEGY = "minimal_schema_enforcement"
 class ChatRequest(BaseModel):
     session_id: str = Field(default="default")
     user_query: str
-    target_role: str = Field(default="백엔드 개발자")
-    resume_text: str = Field(default="")
-    jd_text: str = Field(default="")
+    document_type: str = Field(default="근로계약서")
+    contract_text: str = Field(default="")
+    reference_text: str = Field(default="")
 
 
 class ReferenceItem(BaseModel):
@@ -44,9 +44,9 @@ class NodeExecutionStatus(BaseModel):
 class ChatResponse(BaseModel):
     session_id: str
     summary: str
-    resume_improvements: list[str] = Field(default_factory=list)
-    interview_preparation: list[str] = Field(default_factory=list)
-    two_week_plan: list[str] = Field(default_factory=list)
+    clause_analysis: list[str] = Field(default_factory=list)
+    risk_findings: list[str] = Field(default_factory=list)
+    revision_plan: list[str] = Field(default_factory=list)
     input_gap_notice: str | None = None
     references: list[ReferenceItem] = Field(default_factory=list)
     route: str | None = None
@@ -81,9 +81,9 @@ def enforce_chat_response_contract(payload: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "summary": str(payload.get("summary", "") or "").strip() or "요청 결과를 요약합니다.",
-        "resume_improvements": list(payload.get("resume_improvements", []) or []),
-        "interview_preparation": list(payload.get("interview_preparation", []) or []),
-        "two_week_plan": list(payload.get("two_week_plan", []) or []),
+        "clause_analysis": list(payload.get("clause_analysis", []) or []),
+        "risk_findings": list(payload.get("risk_findings", []) or []),
+        "revision_plan": list(payload.get("revision_plan", []) or []),
         "input_gap_notice": (
             None
             if payload.get("input_gap_notice") in (None, "", "None", "null", "nan")

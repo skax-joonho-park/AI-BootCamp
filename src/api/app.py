@@ -1,4 +1,4 @@
-"""FastAPI app for JobPilot service."""
+"""FastAPI app for LegalPilot service."""
 
 from __future__ import annotations
 
@@ -7,20 +7,20 @@ from functools import lru_cache
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from src.common import JobPilotError
-from src.workflow import ChatRequest, ChatResponse, JobPilotService
+from src.common import LegalPilotError
+from src.workflow import ChatRequest, ChatResponse, LegalPilotService
 
 
 @lru_cache(maxsize=1)
-def get_service() -> JobPilotService:
-    return JobPilotService()
+def get_service() -> LegalPilotService:
+    return LegalPilotService()
 
 
-app = FastAPI(title="JobPilot AI API", version="1.0.0")
+app = FastAPI(title="LegalPilot AI API", version="1.0.0")
 
 
-@app.exception_handler(JobPilotError)
-def handle_jobpilot_error(_: Request, exc: JobPilotError) -> JSONResponse:
+@app.exception_handler(LegalPilotError)
+def handle_legalpilot_error(_: Request, exc: LegalPilotError) -> JSONResponse:
     # Keep error contract flat for API clients.
     return JSONResponse(
         status_code=exc.status_code,
@@ -34,7 +34,7 @@ def handle_unexpected_error(_: Request, exc: Exception) -> JSONResponse:
         status_code=500,
         content={
             "error_code": "INTERNAL_SERVER_ERROR",
-            "detail": f"JobPilot service failed: {exc}",
+            "detail": f"LegalPilot service failed: {exc}",
         },
     )
 

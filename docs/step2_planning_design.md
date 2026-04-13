@@ -1,187 +1,128 @@
 [Step2 - 기획 및 설계]
 
-**[서비스명 - JobPilot AI (잡파일럿)]**
+**[서비스명 - LegalPilot AI (리걸파일럿)]**
 
 **1. 프로젝트 개요 – 기획 배경 및 핵심 내용**
 
 ### **1.1 프로젝트 기획 배경**
 
-- **어떤 문제를 해결하고자 하는가?**  
-  취업/이직 준비 과정에서 흩어진 정보(채용공고, 직무역량, 이력서 피드백, 면접 대비)를 한 번에 정리하고 실행 가능한 액션 플랜으로 제공하는 문제를 해결하고자 합니다.
+- **어떤 문제를 해결하고자 하는가?**
+  법률 문서(근로계약서, 임대차계약서, NDA, 용역계약서 등) 검토 과정에서 법령 기준·표준 계약서·분쟁 사례를 직접 대조하는 작업이 복잡하고 전문성을 요구하는 문제를 해결하고자 합니다.
 
-- **기존 방식의 한계는 무엇인가?**  
-  검색/커뮤니티/문서 템플릿을 각각 따로 사용해야 하며, 사용자 경력/직무 맥락을 반영한 맞춤형 피드백이 부족합니다.
+- **기존 방식의 한계는 무엇인가?**
+  비전문가가 법령 원문을 직접 해석하거나, 변호사 자문을 별도로 구해야 하는 비용·접근성 문제가 있습니다. 단순 검색은 계약 맥락을 반영하지 못합니다.
 
-- **Agent 서비스로 해결할 수 있는 Pain Point는 무엇인가?**  
-  멀티 에이전트가 역할을 분담하여(공고 분석, 이력서 개선, 면접 질문 생성, 일정 계획) 빠르게 맞춤형 결과를 제공하고, RAG로 근거 기반 응답의 신뢰성을 높일 수 있습니다.
+- **Agent 서비스로 해결할 수 있는 Pain Point는 무엇인가?**
+  멀티 에이전트가 역할을 분담하여(조항 분석, 위험 탐지, 수정 계획 수립) 계약서와 관련 법령을 대조해 근거 기반 검토 의견을 빠르게 제공합니다.
 
-- **이 프로젝트를 시작하게 된 동기는 무엇인가?**  
-  취업 준비는 정보 탐색보다 "실행 우선순위"가 핵심인데, 이를 자동화/개인화한 서비스 수요가 높다고 판단했습니다.
+- **이 프로젝트를 시작하게 된 동기는 무엇인가?**
+  계약서 검토는 정보 탐색보다 "위험 식별 + 수정 우선순위"가 핵심인데, 이를 자동화·구조화한 서비스 수요가 높다고 판단했습니다.
 
 ### **1.2 핵심 아이디어 및 가치 제안(Value Proposition)**
 
-- **서비스가 제공하는 핵심 기능은 무엇인가?**  
-  1) 공고-이력서 갭 분석(`jd_text` + `resume_text` 비교), 2) 맞춤 이력서/포트폴리오 개선안, 3) 직무별 면접 질문/모범답변, 4) 2주 실행 플랜 자동 생성
+- **서비스가 제공하는 핵심 기능은 무엇인가?**
+  1) 계약서 조항 분석(`contract_text` 기반 핵심/문제 조항 파악), 2) 위험 조항 탐지(법령 위반 가능성·불리한 조건), 3) 수정 계획 수립(우선순위·검토 항목 중심 액션 플랜)
 
-- **사용자에게 제공되는 가치와 기대효과는 무엇인가?**  
-  준비 시간 단축, 준비 품질 향상, 실제 면접 대응력 강화, 일관된 학습/준비 루틴 형성
+- **사용자에게 제공되는 가치와 기대효과는 무엇인가?**
+  계약 체결 전 위험 식별, 수정 우선순위 명확화, 법령 근거 기반 검토 의견으로 계약 리스크 최소화
 
-- **기존 서비스 대비 차별성은 무엇인가?**  
-  단일 챗봇이 아닌 역할 기반 Multi-Agent + RAG 결합으로 "근거 있는 코칭 + 실행 계획"까지 종단 간(End-to-End) 제공
+- **기존 서비스 대비 차별성은 무엇인가?**
+  단일 챗봇이 아닌 역할 기반 Multi-Agent + RAG 결합으로 "근거 있는 조항 검토 + 수정 계획"까지 종단 간(End-to-End) 제공
 
 - **차별성 검증 포인트(단일 챗봇 대비)**
-  - 라우팅 정확도: 의도 라벨(`resume_only`, `interview_only`, `plan_only`, `full`) 기준 샘플 질의셋 Top-1 정확도 측정
-  - 근거 포함률: 최종 응답에서 `references`가 1개 이상 포함된 비율과, 근거-본문 의미 일치 여부(수기 체크리스트) 측정
-  - 실행 플랜 품질: `two_week_plan` 항목의 실행 가능성(구체 행동/기한/우선순위 포함 여부) 점수화(예: 5점 척도) 비교
+  - 라우팅 정확도: 의도 라벨(`clause_only`, `risk_only`, `advice_only`, `full_review`) 기준 샘플 질의셋 Top-1 정확도 측정
+  - 근거 포함률: 최종 응답에서 `references`가 1개 이상 포함된 비율과 근거-본문 의미 일치 여부 측정
+  - 수정 계획 품질: `revision_plan` 항목의 실행 가능성(구체 행동/우선순위 포함 여부) 점수화 비교
   - 자동화 경로: `scripts/evaluate_differentiation_metrics.py` + `data/eval/sample_queries.json`로 배치 평가(임계치 미달 시 실패 코드 반환)
-  - 경계 조건 운영 원칙: 샘플 질의셋은 고정 라벨 케이스(`resume_only/interview_only/plan_only/full`)와 무라벨 모호 질의를 혼합해, 라우팅 안정성과 실서비스 유사성을 함께 점검
-  - 분포 기준: 현재 샘플 구성은 총 25건(`resume_only` 5, `interview_only` 5, `plan_only` 5, `full` 5, 모호 질의 5)이며, 평가 스크립트에서 라벨/모호 질의 최소 개수 기준을 함께 검증
+  - 경계 조건 운영 원칙: 샘플 질의셋은 고정 라벨 케이스(`clause_only/risk_only/advice_only/full_review`)와 무라벨 모호 질의를 혼합해 라우팅 안정성과 실서비스 유사성을 함께 점검
+  - 분포 기준: 현재 샘플 구성은 총 25건(`clause_only` 5, `risk_only` 5, `advice_only` 5, `full_review` 5, 모호 질의 5)
 
 ### **1.3 대상 사용자 및 기대 사용자 경험(UX)**
 
-- **주요 타겟**  
-  신입 구직자, 주니어/미드레벨 이직 준비자, 부트캠프 수료생
+- **주요 타겟**
+  개인 사업자, 프리랜서, 임차인, 중소기업 담당자 — 법률 전문가 없이 계약서를 직접 검토해야 하는 비전문가
 
-- **사용자에게 어떤 흐름과 경험을 제공할 것인가?**  
-  질문 입력/직무 선택 -> 자료 업로드(JD/공고 + 이력서 파일 또는 텍스트) -> 분석 결과 확인 -> 입력 기록 저장 -> 필요 시 "다시 불러오기"로 과거 입력/결과 복원 -> 액션 아이템 실행
+- **사용자에게 어떤 흐름과 경험을 제공할 것인가?**
+  질문 입력/계약서 유형 선택 → 계약서 업로드(파일/텍스트) + 참조 법령 입력(선택) → 조항 분석/위험 탐지/수정 계획 확인 → 입력 기록 저장 → 필요 시 "다시 불러오기"로 과거 입력/결과 복원
 
-- **사용자가 서비스에서 얻는 구체적 Benefit은 무엇인가?**  
-  "지금 무엇을 고쳐야 하는지"가 명확한 체크리스트와 근거 문서 기반 조언, 즉시 활용 가능한 답변 초안
+- **사용자가 서비스에서 얻는 구체적 Benefit은 무엇인가?**
+  "어떤 조항이 문제인가", "어떤 법령 위반이 우려되는가", "어떻게 수정해야 하는가"가 명확한 체크리스트와 법령 근거 기반 조언
 
 **2. 기술 구성 – 서비스에 적용할 기술 스택**
 
-*아래 항목을 참고해 서비스에 적용한 기술 / 방식 등을 정리하세요*
-
 ### **2.1 Prompt Engineering 전략**
 
-- **역할 기반 프롬프트**  
-  Supervisor, Resume Agent, Interview Agent, RAG Agent 각각의 시스템 프롬프트 분리
+- **역할 기반 프롬프트**
+  Supervisor, Clause Agent, Risk Agent, Advice Agent, RAG Agent 각각의 시스템 프롬프트 분리
 
-- **고품질 응답 전략(Few-shot + 근거 기반 요약)**  
-  직무별 예시 답변(Few-shot) + 근거 문장/출처 기반 요약 + 금지 규칙(근거 없는 단정 금지, 생각 과정 비노출, 합격 확률/결과 보장 표현 금지)
-  - Tool 활용 실효성 강화: 도구 출력은 JSON(점수/키워드/질문 배열)으로 표준화하고, Agent가 이를 최소 1회 이상 본문에 반영하도록 지시
-  - 운영 비용 제어: Few-shot은 직무별 최소 예시만 선택 주입(`FEW_SHOT_MAX_EXAMPLES`)하고, 확장 예시는 지식문서(RAG exemplar)로 관리해 토큰 비용을 제한
-  - 운영 편의성 강화: Few-shot 예시는 `data/prompts/few_shots/*.md`에서 로드하고, 파일 누락/오류 시 기본 내장 예시로 fallback해 서비스 중단을 방지
+- **고품질 응답 전략(Few-shot + 근거 기반 요약)**
+  계약서 유형별 예시 답변(Few-shot) + 근거 법령/출처 기반 요약 + 금지 규칙(근거 없는 단정 금지, 법률 자문 보장 표현 금지)
+  - Tool 활용 실효성 강화: 도구 출력은 JSON(점수/키워드/이슈 배열)으로 표준화하고, Agent가 이를 최소 1회 이상 본문에 반영하도록 지시
+  - 운영 비용 제어: Few-shot은 계약서 유형별 최소 예시만 선택 주입(`FEW_SHOT_MAX_EXAMPLES`)
 
-- **출력 구조화 템플릿 정의**  
-  JSON 스키마 기반 출력(요약, 강점/약점, 개선안, 근거 출처, 다음 액션)
-  - route-aware 출력 규칙: `resume_only / interview_only / plan_only / full` 라우트에 따라 섹션 최소 개수/표시 여부를 다르게 적용해 불필요 섹션은 빈 배열로 반환
-  - 라우트 최소 개수 정책: `resume_only/interview_only`는 `two_week_plan` 최소 개수를 0으로 두어 "플랜 제외" 시나리오와 일치
-  - 요약 정책 통일: `plan_only`를 포함한 모든 라우트에서 `summary`는 항상 제공하며, `plan_only`는 1~2문장으로 짧게 유지
-  - 근거 추적 강화: 중간 산출물에 `evidence_map`(항목 -> 근거 chunk 번호)과 최종 액션 불릿의 citation(`[1][2]`) 표기를 요구해 근거-결론 연결성을 명시
-  - 코드 계약 보강: 파싱 실패 시 재시도(temperature 하향 + JSON repair 지시) 후 최소 스키마 강제(`enforce_chat_response_contract`)로 UI/API 계약 안정성 확보, 관련 에러 코드는 `src/common/errors.py`에 고정
-
-- **사용자 유형/상황별 프롬프트 분기**  
-  신입/경력, 직무(백엔드/데이터/PM), 목표 회사 수준(대기업/스타트업)에 따라 프롬프트 분기
+- **출력 구조화 템플릿 정의**
+  JSON 스키마 기반 출력(요약, 조항 분석, 위험 조항, 수정 계획, 근거 출처)
+  - route-aware 출력 규칙: `clause_only/risk_only/advice_only/full_review` 라우트에 따라 섹션 최소 개수/표시 여부를 다르게 적용
+  - 법률 면책 문구 자동 첨부: 모든 응답 summary에 "본 검토 의견은 법적 자문이 아님" 고지를 자동 삽입
 
 ### **2.2 LangChain / LangGraph 기반 Agent 구조**
 
-- **Multi-Agent 설계 개념**  
-  Supervisor가 사용자 요청을 분류/라우팅하고, RAG 근거를 공통으로 확보한 뒤 Resume/Interview/Plan Agent가 분업 처리한 결과를 통합해 최종 응답 생성
+- **Multi-Agent 설계 개념**
+  Supervisor가 사용자 요청을 분류/라우팅하고, RAG 근거를 공통으로 확보한 뒤 Clause/Risk/Advice Agent가 분업 처리한 결과를 통합해 최종 응답 생성
 
-- **각 Agent의 역할(Role) 정의**  
-  - `Supervisor(Planner 역할 포함)`: 요청 분해, 우선순위 결정, 결과 통합  
-  - `Resume Agent`: 이력서/포트폴리오 개선  
-  - `Interview Agent`: 예상 질문/답변 코칭  
-  - `Plan Agent`: 우선순위/일정/검증 방법 중심 2주 실행 계획 수립  
-  - `RAG Agent`: 지식 검색 및 근거 제공(plan_only 포함 모든 라우트에서 최소 근거 확보)
-  - 노드 독립성 구현: Supervisor/RAG/Resume/Interview/Plan/Synthesis 노드별로 모델 온도와 시스템 역할 지시를 분리해 각 노드의 판단 편향을 완화
+- **각 Agent의 역할(Role) 정의**
+  - `Supervisor(Planner 역할 포함)`: 요청 분해, 우선순위 결정, 결과 통합
+  - `Clause Agent`: 핵심·문제 조항 분석 및 evidence_map 생성
+  - `Risk Agent`: 위험 조항 탐지 및 법적 우려 사항 식별
+  - `Advice Agent`: 우선순위·수정 방향 중심 액션 플랜 수립
+  - `RAG Agent`: 법령/표준 계약서/판례 검색 및 근거 제공
 
-- **Tool Calling, ReAct, Memory 활용 여부**  
+- **Tool Calling, ReAct, Memory 활용 여부**
   Tool Calling(필수), ReAct 스타일 도구 루프(max step 기반 종료), 세션 메모리 + LangGraph Checkpointer 적용
-  - 구현 선택 명시: LangGraph Checkpointer는 `MemorySaver`(인메모리)로 같은 프로세스 런타임 내 멀티스텝 복원에 사용
-  - 저장소 역할 분담: 서버 재시작 이후 영속 복원/재사용은 `data/index/session_memory.json`(SessionMemory), `data/index/final_answer_cache.json`(파일 캐시)로 분리 운영
 
 ### **2.3 RAG 구성**
 
-- **데이터 수집/전처리 파이프라인**  
-  채용공고, 직무기술서, 면접 가이드, 포트폴리오 예시 문서(TXT/MD/CSV/PDF/DOCX/XLSX) 수집 -> 정규화 -> 청킹
+- **데이터 수집/전처리 파이프라인**
+  법령 요약본, 표준 계약서, 분쟁 사례 가이드, 계약서 예시 문서(TXT/MD/CSV/PDF/DOCX/XLSX) 수집 → 정규화 → 청킹
 
-- **임베딩 모델 및 Vector DB 선택**  
+- **임베딩 모델 및 Vector DB 선택**
   `text-embedding-ada-002`(환경변수 `AOAI_DEPLOY_EMBED_ADA`) + FAISS
 
-- **검색 로직과 응답 생성 방식**  
-  하이브리드 검색(BM25 + 벡터 유사도) -> 상위 문서 재정렬 -> 출처 포함 응답 생성
-  - 재현성 관리: 형태소 분석기(`kiwi/okt`) 사용 여부와 fallback 토크나이저 적용 결과를 메타에 기록해 환경별 품질 편차를 추적
-  - 튜닝 포인트 분리: 하이브리드 가중치(`VECTOR_WEIGHT`, `BM25_WEIGHT`)를 설정값으로 분리해 실험/운영에서 빠르게 조정
-  - 안전모드 고도화: 검색 결과가 있더라도 최고 점수가 임계치 미만이면(`RAG_EVIDENCE_SCORE_THRESHOLD`) 근거 부족 모드로 전환해 보수적 표현을 우선
-  - 점수 스케일 정합성: FAISS distance는 쿼리-독립 변환(`1/(1+d)`)으로 0~1 유사도 스케일로 맞춘 뒤 융합해 low-confidence 임계치 해석 일관성을 유지
-  - 내구성 보강: route-aware 카테고리 필터 적용 후 결과가 비면 필터 없이 재검색(fallback)해 근거 누락을 완화
-  - 캐시 로드 안전성: FAISS 캐시 로드시 `retriever_meta.json`에 저장된 `cache_hashes`와 실제 `index.faiss/index.pkl` SHA-256을 대조해 일치할 때만 재사용(불일치 시 재생성)
-  - 배포 보안 기본값: `FAISS_ALLOW_DANGEROUS_DESERIALIZATION` 기본값은 `false`이며, 로컬 개발 환경에서만 필요 시 `true`로 opt-in
-  - 카테고리 품질 진단: 인덱스 빌드 시 카테고리 분포/`uncategorized` 비중을 점검하고, 비중 과다 또는 필수 카테고리 누락 시 경고와 진단 메타를 `retriever_meta.json`에 기록
-  - 루트 문서 자동 분류: `data/knowledge` 루트 파일은 파일명 규칙으로 카테고리를 자동 추론해 `uncategorized` 과다를 완화(운영은 카테고리 하위 폴더 배치를 우선 권장)
-  - 운영 스위치: `ALLOW_UNCATEGORIZED_IN_FILTER`로 route-aware 필터에서 `uncategorized` 허용 여부를 환경별로 제어해 데이터 성숙도에 따라 점진적으로 tighten 가능
-  - 리랭크 확장성 분리: 휴리스틱 리랭킹을 `src/retrieval/rerank.py`로 분리하고 `RERANK_ENABLED`, `RERANK_PROVIDER` 설정으로 전략 on/off 및 교체 포인트를 표준화
-  - 검색 다양성 제약: `RERANK_MAX_PER_SOURCE`로 top-k 내 동일 source 문서 청크 수를 제한해 references 중복을 완화
-  - 중복 제어 역할 분리: rerank 활성 시 retrieval 단계 source 상한(`RETRIEVAL_MAX_CHUNKS_PER_FILE`)은 비활성화하고, 최종 다양성 제어는 `RERANK_MAX_PER_SOURCE` 단일 정책으로 운영
-  - 업로드 입력 근거 편입: `jd_text/resume_text`를 임시 청크(ephemeral evidence)로 생성해 검색 후보에 혼합하여 공고-이력서 갭 분석의 직접 근거성을 강화
-  - 임시 근거 점수 파라미터화: 업로드 텍스트 점수는 `EPHEMERAL_JD_BASE_SCORE`, `EPHEMERAL_RESUME_BASE_SCORE`, `EPHEMERAL_OVERLAP_WEIGHT`로 분리해 임계치/융합 스케일과 함께 운영 튜닝 가능
-  - 점수 해석성 강화: references에 `score_breakdown`(vector/bm25/fused/penalty/rerank 기여) 메타를 포함해 품질 튜닝 근거를 가시화
-  - 점수 스케일 일관성: rerank 이후 점수도 0~1 범위로 클리핑해 `RAG_EVIDENCE_SCORE_THRESHOLD` 절대값 해석을 안정적으로 유지
+- **검색 로직과 응답 생성 방식**
+  하이브리드 검색(BM25 + 벡터 유사도) → 상위 문서 재정렬 → 출처 포함 응답 생성
+  - 업로드 입력 근거 편입: `contract_text/reference_text`를 임시 청크(ephemeral evidence)로 생성해 검색 후보에 혼합
+  - 임시 근거 점수 파라미터화: `EPHEMERAL_REF_BASE_SCORE`, `EPHEMERAL_CONTRACT_BASE_SCORE`, `EPHEMERAL_OVERLAP_WEIGHT`로 분리
 
-- **도메인 지식 범위(출처 유형/라이선스/최신성)**  
-  - 출처 유형: 채용공고 요약본, 직무기술서(JD) 정리본, 면접 가이드, 포트폴리오 작성 예시  
-  - 저장 경로/카테고리: `data/knowledge/job_postings/*`, `data/knowledge/jd/*`, `data/knowledge/interview_guides/*`, `data/knowledge/portfolio_examples/*`  
-  - 카테고리 보완 정책: 운영 중 루트 문서가 존재해도 필터가 과도하게 누락되지 않도록 `uncategorized` 카테고리를 route-aware 필터에서 허용
-  - 라이선스 원칙: 공개적으로 활용 가능한 문서/직접 작성한 요약본 중심으로 구성하며, 저작권 제약이 있는 원문은 전문 저장 대신 요약/메타데이터만 반영  
-  - 최신성 관리: 월 1회 이상 문서 갱신 점검(수집일/수정일 메타 기록), 오래된 공고/가이드는 우선순위 하향 처리
-  - 최소 요건 체크리스트:
-    - [ ] 카테고리별 최소 1개 문서(`job_postings/`, `jd/`, `interview_guides/`, `portfolio_examples/`)
-    - [ ] 최신성 기준(최근 3개월 우선, 오래된 문서는 라벨링/교체)
-    - [ ] 금지 콘텐츠 제외(개인정보 원문, 저작권 위반 원문 전문, 근거 불명확 문서)
-  - 메타데이터 최소 필드 규약(운영/확장 공통):
-
-| 필드 | 설명 | 예시 |
-|---|---|---|
-| `collected_at` | 문서 수집/업로드 일시(ISO 권장) | `2026-03-05` |
-| `source_url` | 원문 출처 URL(내부 문서는 `internal://...`) | `https://careers.example.com/posting/123` |
-| `curator` | 요약/정리 담당자 또는 팀 | `jobpilot-team` |
-| `license` | 사용 가능 라이선스/내부 사용 정책 | `CC-BY-4.0`, `internal-use` |
-  - 적용 수준 구분:
-    - **권장(현재 로더)**: `src/retrieval/documents.py`는 본문/카테고리 로딩 시 문서별 `*.meta.json` sidecar를 병합하고, 최소 필드(`collected_at/source_url/curator/license`)를 metadata에 반영(누락/파싱 오류 시 경고)
-    - **강제/검증(전처리 스크립트)**: `scripts/validate_knowledge_metadata.py`로 `*.meta.json` 필수 필드(`collected_at/source_url/curator/license`)를 배치 검증하고 `--max-uncategorized-ratio` 임계치 초과 시 경고/실패를 강제
+- **도메인 지식 범위(출처 유형/라이선스/최신성)**
+  - 출처 유형: 법령 요약본, 표준 계약서, 법원 분쟁 사례 가이드, 계약서 예시
+  - 저장 경로/카테고리: `data/knowledge/statutes/*`, `data/knowledge/standard_contracts/*`, `data/knowledge/case_guides/*`, `data/knowledge/contract_examples/*`
+  - 라이선스 원칙: 공개 법령 자료 중심 구성, 저작권 제약이 있는 원문은 요약/메타데이터만 반영
 
 - **RAG 안전 정책(신뢰성 설계)**
-  - 근거 부족 시 전환: 검색 결과가 부족하거나 신뢰 점수가 낮은 경우, "일반 가이드 기반 조언"으로 전환하고 단정형 표현을 제한
-  - 출처 우선 응답: 가능하면 `references`에 문서 출처를 포함하고, 근거가 없는 주장은 권장안 형태(조건부 표현)로만 제시
-  - 추적성 강화: `references`는 rank/source/location/chunk 정보를 포함한 형태로 제공해 citation과 출처 간 연결을 명확화
-  - UX 결정(토글): Streamlit에서 `참고 출처 메타데이터 표시` 토글을 제공해 `collected_at/source_url/curator/license` 노출 여부를 사용자가 선택할 수 있도록 설계
-  - 도메인 범위 고지: 지식 범위를 벗어나는 질문은 범용 취업 준비 가이드로 응답하며, 추가 문서 업로드를 사용자에게 안내
+  - 근거 부족 시 전환: "일반 법령 가이드 기반 조언"으로 전환하고 단정형 표현을 제한
+  - 법률 자문 면책 고지: 모든 응답에 "본 검토 의견은 법적 자문이 아님" 문구 삽입
+  - 도메인 범위 고지: 지식 범위를 벗어나는 질문은 전문 법률가 상담을 안내
 
 ### **2.4 서비스 개발 및 패키징 계획**
 
-- **UI 개발 방식(Streamlit, React 등)**  
-  Streamlit 기반 대화형 UI(질문/직무 입력, JD/공고 + 이력서 파일 업로드, 결과 카드, 실행 입력 기록 조회/삭제, 다시 불러오기, 입력란 내부 실시간 카운터(`max_chars`) 기반 대용량 입력 방어)
-  - 실행 전 사전 안내 정책: `resume_text` 미입력 상태에서는 이력서 전용 요청이 계획 중심 라우트(`plan_only`)로 자동 조정될 수 있음을 UI에서 미리 고지해 결과 해석 혼선을 방지
-  - 실행 기록 스키마 버전 정책: `ui_input_history.json` 레코드에 `record_version`을 저장해 포맷 변경 시 역호환/마이그레이션 기준점을 유지
-  - 파일 파서 공통화: Streamlit 업로드 파서와 RAG 문서 로더가 `src/utils/file_extract.py`를 공통 사용해 포맷별 파싱/예외 처리를 단일화
-  - 저장소 스위치 스캐폴딩: 설정에 `STATE_STORE_BACKEND`/`STATE_STORE_DSN`을 두어 향후 SQLite/Redis 전환 경로를 열어두고, 현재는 file 백엔드를 기본/우선 적용
-  - 인덱스 UX 보강: 첫 실행 인덱싱 지연을 안내하고, 관리용 "인덱스 사전 빌드/로드" 동작을 제공해 대기 시간을 예측 가능하게 설계
-  - 개인정보 옵션: 실행 입력 기록 파일 저장 on/off와 저장 전 이메일/전화번호 마스킹 옵션으로 운영 환경의 민감정보 노출 리스크 완화
+- **UI 개발 방식**
+  Streamlit 기반 대화형 UI(질문/계약서 유형 선택, 계약서 + 참조 법령 파일 업로드, 결과 카드, 실행 입력 기록 조회/삭제/다시 불러오기)
 
-- **BE(API) 및 배포 전략(FastAPI, Docker 등)**  
-  FastAPI로 Agent 실행 API 분리, 예외 처리(400/500)로 사용자 친화적 오류 응답 제공, 로컬 Docker 옵션 제공(선택)
-  - 에러 처리 표준화: 문자열 파싱 대신 `error_code/detail` 공통 계약(`JobPilotError`)을 API/CLI/UI에 일관 적용해 프론트-백 분기 안정성 확보
+- **BE(API) 및 배포 전략**
+  FastAPI로 Agent 실행 API 분리, 예외 처리(400/500)로 사용자 친화적 오류 응답 제공
+  - 에러 처리 표준화: `error_code/detail` 공통 계약(`LegalPilotError`)을 API/CLI/UI에 일관 적용
 
-- **설정/환경 관리 계획**  
-  `final-project/.env` 사용, `src/config/settings.py`에서 로드, `requirements-final.txt`로 의존성 고정, 필요 시 `INDEX_FORCE_REBUILD=true`로 인덱스 강제 재생성
+- **설정/환경 관리 계획**
+  `.env` 사용, `src/config/settings.py`에서 로드, `requirements.txt`로 의존성 고정
 
 ### **2.5 선택적 확장 기능**
 
-- **LLM Fundamentals 기반 Structured Output / Function Calling**  
+- **LLM Fundamentals 기반 Structured Output / Function Calling**
   결과를 JSON으로 강제하여 UI 렌더링 안정화
 
-- **MCP 기반 파일/시스템/API 연동**  
-  로컬 파일 검색/회사 정보 API 연계(확장 옵션)
-
-- **A2A 기반 Agent 협업 구조**  
-  향후 외부 에이전트(면접 시뮬레이터)와 협업 가능한 인터페이스 설계
-
-- **안정성/복원성 확장(운영 관점)**  
+- **안정성/복원성 확장(운영 관점)**
   Structured Output 실패 시 노드별 fallback(최소 필드 degrade) 적용, 체크포인터 기반 세션 복원으로 재실행 비용 최소화
-  - 부분 실패 계약: `ChatResponse.node_status`(ok/degraded/skipped, error_code/detail)로 노드별 상태를 명시해 단일 노드 실패가 전체 500으로 전파되지 않도록 설계
-  - Tool Calling 능동성 명시: `_run_tool_loop_structured_with_trace()`에서 `bind_tools()`로 도구를 노출하고 모델이 `tool_calls`를 자율 선택해 실행
+  - 부분 실패 계약: `ChatResponse.node_status`(ok/degraded/skipped, error_code/detail)로 노드별 상태를 명시
 
 ### **2.6 설계-구현 1:1 매핑**
 
@@ -190,171 +131,30 @@
 | Route-aware 출력 정책 | `src/workflow/engine.py` (`route_minimums`, `normalize_final_answer_by_route`, `enforce_final_answer_policy`) | 라우트별 최소 항목/섹션 표시 규칙을 코드 후처리로 강제 |
 | 부분 실패 격리 계약 | `src/workflow/engine.py` (`derive_node_status`), `src/workflow/contracts.py` (`ChatResponse.node_status`) | 노드 단위 fallback/degraded를 응답 메타로 노출하고 전체 요청은 유지 |
 | Tool Calling 능동 실행 | `src/workflow/engine.py` (`_run_tool_loop_structured_with_trace`), `src/agents/tools.py` | `bind_tools()`로 도구를 모델에 주입하고 `tool_calls`를 모델이 자율 선택 |
-| 체크포인터/메모리 역할 분리 | `src/workflow/engine.py` (`MemorySaver`, `final_answer_cache`), `src/utils/memory.py` (`SessionMemory`) | 런타임 그래프 복원 vs 재시작 후 영속 대화/결과 캐시를 분리 운영 (`final_answer_cache`는 중간 상태 저장소가 아니라 정규화된 최종 `ChatResponse` payload cache) |
+| 체크포인터/메모리 역할 분리 | `src/workflow/engine.py` (`MemorySaver`, `final_answer_cache`), `src/utils/memory.py` (`SessionMemory`) | 런타임 그래프 복원 vs 재시작 후 영속 대화/결과 캐시를 분리 운영 |
 | RAG 안전/근거 추적 | `src/workflow/engine.py` (`rag_node`), `src/retrieval/hybrid.py`, `src/retrieval/rerank.py` | 하이브리드 검색 + 재정렬 + 저신뢰 안전모드 + 구조화 references/score_breakdown 제공 |
-| 차별성 자동평가 루프 | `scripts/evaluate_differentiation_metrics.py`, `data/eval/sample_queries.json` | 라우팅/근거 포함/플랜 품질 지표를 배치 실행으로 자동 검증 |
+| 차별성 자동평가 루프 | `scripts/evaluate_differentiation_metrics.py`, `data/eval/sample_queries.json` | 라우팅/근거 포함/수정 계획 품질 지표를 배치 실행으로 자동 검증 |
 
 #### 2.6-1 기술별 실제 적용 위치(1페이지 요약)
 
 | 기술 요소 | 실제 적용 위치 | 확인 포인트 |
 |---|---|---|
-| Supervisor 라우팅 | `src/workflow/engine.py::supervisor_node`, `src/workflow/engine.py::route_after_supervisor` | 의도 분류 후 `resume/interview/plan/synthesis` 조건 분기 |
-| 하이브리드 검색 | `src/retrieval/hybrid.py::HybridRetriever.search`, `src/retrieval/hybrid.py::HybridRetriever._vector_scores` | FAISS + BM25 융합, 쿼리-독립 점수 스케일 변환, 길이 패널티 |
-| 리랭크/다양성 제어 | `src/retrieval/rerank.py::rerank_hits` | role/category boost + source당 max 청크 제한 |
-| RAG 오케스트레이션 | `src/workflow/engine.py::rag_node`, `src/workflow/engine.py::_category_filter_for_route` | route-aware filter, no-hit fallback, low-confidence 안전모드 |
-| 실행 기록 요약 저장 | `src/ui/history_record.py::build_history_record`, `src/ui/history_record.py::migrate_history_record` | `summary/full` 저장 모드, `record_version` 기반 역호환 가능한 최소 저장 정책 |
-| UI 업로드 파싱 공통화 | `src/utils/file_extract.py`, `src/ui/streamlit_app.py`, `src/retrieval/documents.py` | UI/RAG가 동일 파서를 공유해 포맷별 예외 처리 단일화 |
+| Supervisor 라우팅 | `src/workflow/engine.py::supervisor_node`, `route_after_supervisor` | 의도 분류 후 `clause/risk/advice/synthesis` 조건 분기 |
+| 하이브리드 검색 | `src/retrieval/hybrid.py::HybridRetriever.search` | FAISS + BM25 융합, 쿼리-독립 점수 스케일 변환 |
+| 리랭크/다양성 제어 | `src/retrieval/rerank.py::rerank_hits` | category boost + source당 max 청크 제한 |
+| RAG 오케스트레이션 | `src/workflow/engine.py::rag_node` | route-aware filter, no-hit fallback, low-confidence 안전모드 |
+| 실행 기록 요약 저장 | `src/ui/history_record.py::build_history_record` | `summary/full` 저장 모드, `record_version` 기반 역호환 |
+| UI 업로드 파싱 공통화 | `src/utils/file_extract.py` | UI/RAG가 동일 파서를 공유해 포맷별 예외 처리 단일화 |
 
 ### **2.7 차별성 검증 데이터셋 확장 가이드**
 
-- **직무 분포 가이드(backend/data/pm)**
-  - 기본 원칙: 각 직무별 최소 8~10건 이상을 유지하고, 라우트(`resume_only/interview_only/plan_only/full`)가 한 직무에 치우치지 않도록 균형 배치
-  - 권장 시작점(현재): `data/eval/sample_queries.json` 25건을 seed로 사용하고, 직무별/라우트별 2~3건씩 증분 추가
+- 고정 라벨 케이스(`clause_only/risk_only/advice_only/full_review`)와 무라벨 모호 질의를 혼합해 라우팅 안정성과 실서비스 유사성을 함께 점검
+- 경계 조건(부정문 라우팅, 복합 의도)을 별도로 추가해 휴리스틱 라우팅 내성을 검증
+- `data/eval/sample_queries.json` 필드: `query`, `document_type`, `contract_text`, `reference_text`, `expected_route`
 
-- **모호 질의 라벨링 기준(`expected_route` 공란)**
-  - `expected_route=""`는 다의적 의도(예: "이직 준비 도와줘", "핵심만 정리해줘")에만 사용
-  - 명시적 제외/전용 키워드(예: "면접 제외", "계획만")가 있으면 반드시 고정 라벨 부여
-  - 모호 질의는 라우팅 정확도 분모에서 제외하고, 경계조건/회복탄력성 관측용으로만 사용
-
-- **재현성 체크 규칙(배치 평가 연동)**
-  - `scripts/evaluate_differentiation_metrics.py`에서 케이스 분포(`resume_only/interview_only/plan_only/full/ambiguous`)를 함께 출력
-  - `--min-per-labeled-route`, `--min-ambiguous-cases` 임계치를 CI에 고정해 분포 편향이 생기면 fail-fast로 차단
-
-**3. 주요 기능 및 동작 시나리오**
-
-### **3.1 사용자 시나리오(Use Case Scenario)**
-
-- **사용자 목표와 과제 흐름**  
-  "백엔드 개발자 이직 준비" 목표로 공고와 이력서를 업로드해 부족 역량을 파악하고 2주 계획 수립
-
-- **서비스 이용 단계별 행동 정의**  
-  1) 목표 직무 선택 및 질문 입력 -> 2) JD/공고 + 이력서 파일 업로드/텍스트 입력 -> 3) 멀티 에이전트 분석 실행 -> 4) 결과 확인 및 저장 -> 5) 필요 시 기록에서 다시 불러오기 -> 6) 개선안 반영 및 최종 점검
-
-### **3.2 시스템 구조도 / Multi-Agent 다이어그램**
-
-*아래 두 가지 중 하나 이상 필수 업로드*
-
-- 시스템 전체 구조도
-- Multi-Agent 구성도(LangGraph 등 사용 가능)
-
-```mermaid
-flowchart TD
-    U[User/Streamlit UI] --> S[Supervisor Agent]
-    S --> G1[RAG Agent]
-    G1 --> R1[Resume Agent]
-    G1 --> I1[Interview Agent]
-    G1 --> P1[Plan Agent]
-    G1 --> SY[Synthesis]
-    R1 --> I1
-    R1 --> SY
-    I1 --> P1
-    I1 --> SY
-    P1 --> SY
-    G1 --> V[(FAISS Vector DB)]
-    G1 --> B[(BM25 Index)]
-    SY --> O["Structured Response - JSON"]
-    O --> U
-```
-
-> Preview에서 Mermaid가 보이지 않을 경우를 대비해, 아래 이미지 버전을 함께 첨부합니다.
->
-> ![시스템 구조도](./images/system_architecture.png)
->
-> - 이미지 산출물 경로: `docs/images/system_architecture.png`
-
-### **3.3 서비스 플로우(Flow Chart / Sequence Diagram 등)**
-
-- 사용자 요청 -> Agent 처리 -> RAG 검색 -> 응답 생성 -> UI 출력까지 흐름
-
-```mermaid
-%%{init: {
-  "themeVariables": { "fontSize": "17px" },
-  "sequence": {
-    "actorFontSize": 18,
-    "messageFontSize": 16,
-    "noteFontSize": 15
-  }
-}}%%
-sequenceDiagram
-    participant User
-    participant UI as Streamlit<br/>UI
-    participant Sup as Supervisor<br/>Agent
-    participant Rag as RAG<br/>Agent
-    participant Res as Resume<br/>Agent
-    participant Int as Interview<br/>Agent
-    participant Plan as Plan<br/>Agent
-    participant Syn as Synthesis
-
-    User->>UI: 질문/문서 업로드
-    UI->>Sup: 요청 전달<br/>(사용자 의도 분류 시작)
-    Sup->>Rag: route 결정 후 RAG 검색 실행<br/>(필요 근거 수집 단계)
-    Rag-->>Sup: RAG context/references + route 유지<br/>(근거 요약과 출처 반환)
-    alt route=full
-        Rag->>Res: resume_notes 생성<br/>(이력서 개선안 도출)
-        Res->>Int: interview_notes 생성<br/>(면접 대비 포인트 도출)
-        Int->>Plan: plan_notes 생성<br/>(2주 실행 계획 도출)
-        Plan->>Syn: specialist 결과 전달<br/>(최종 합성 입력)
-    else route=resume_only
-        Rag->>Res: resume_notes 생성<br/>(이력서 개선만 수행)
-        Res->>Syn: specialist 결과 전달
-    else route=interview_only
-        Rag->>Int: interview_notes 생성<br/>(면접 대비만 수행)
-        Int->>Syn: specialist 결과 전달
-    else route=plan_only
-        Rag->>Plan: plan_notes 생성<br/>(실행 계획만 수행)
-        Plan->>Syn: specialist 결과 전달
-    end
-    Syn-->>UI: 통합 결과(JSON, node_status 포함)<br/>반환
-    UI-->>User: 카드형 결과/체크리스트 출력
-```
-
-- 비기술자 관점 요약: **요청 분류 -> 근거 찾기 -> 필요한 분석만 실행 -> 한 화면으로 합쳐서 보여주기** 순서로 동작합니다.
-
-> Preview에서 Mermaid가 보이지 않을 경우를 대비해, 아래 이미지 버전을 함께 첨부합니다.
->
-> ![서비스 플로우](./images/service_flow_sequence.png)
->
-> - 이미지 산출물 경로: `docs/images/service_flow_sequence.png`
-
-## **4. 실행 결과**
-
-*개발 IDE에서 실행될 예정이므로 내용 요약 작성*
-
-- **서비스 실행 결과 (text)**  
-  사용자가 직무와 문서를 입력하면, 서비스는  
-  1) 공고-이력서 갭 분석,  
-  2) 우선순위 개선 항목 Top 5,  
-  3) 직무 맞춤 면접 질문/답변,  
-  4) 2주 실행 계획과 참고 출처를 제공함.
-
-- **데모 이미지 or 영상 등**  
-  제출용 산출물은 `docs/evidence/`에 관리함:  
-  - `docs/evidence/e2e_test_checklist.md` (CLI/FastAPI/Streamlit 통합 실행 체크리스트)  
-  - `docs/evidence/streamlit_main_capture.png` (Streamlit 메인 화면 캡처: 입력/출력 동시 노출)  
-  - `docs/evidence/agent_execution_log.md` (Supervisor 라우팅 + RAG 검색 근거)  
-  - `docs/evidence/agent_final_answer.json` (최종 구조화 응답 원본)  
-  - (선택) 1~2분 데모 영상(시나리오 1회 실행)
-
-## **5. 프로젝트 수행 소감 / 피드백**
-
-교육 과정에서 가장 크게 배운 점은 "좋은 모델 선택"보다 "좋은 구조 설계"가 서비스 품질을 더 크게 좌우한다는 점이었습니다.  
-특히 Prompt Engineering, Multi-Agent 분업, RAG 기반 근거 제시를 하나의 흐름으로 연결하면서, 단일 기능 데모와 실제 서비스 수준 구현의 차이를 체감했습니다.
-
-구현 과정에서는 에이전트 역할 분리와 출력 구조화(JSON 강제)가 안정성에 매우 중요하다는 것을 확인했습니다.  
-또한 데이터 전처리와 청킹 전략에 따라 검색 품질이 크게 달라졌고, 응답 정확도 개선을 위해서는 모델 파라미터보다 RAG 파이프라인 설계가 선행되어야 함을 배웠습니다.
-
-최종 구현 단계에서는 하이브리드 검색 + 리랭크, 라우팅/근거/플랜 품질의 자동 평가 스크립트, 캐시 무결성 검증, 파일 락+원자적 저장, `record_version` 기반 히스토리 마이그레이션까지 반영하면서 "운영 가능한 AI 서비스"에 가까운 기준을 경험했습니다.  
-이번 프로젝트는 "기능 구현"을 넘어 "재사용 가능한 구조 설계와 운영 안전장치의 동시 설계"가 실제 품질을 만든다는 점을 학습한 계기였습니다.
-
-## **6. 추가 아이디어 (선택)**
-
-현재 구현 기준(멀티 에이전트 라우팅, RAG 하이브리드 검색/리랭크, 구조화 references, 캐시/락 + 원자적 쓰기, 메타데이터 검증 스크립트)을 바탕으로 한 **고도화** 아이디어:
-
-- **검색 품질 고도화(리랭커 프로바이더 실전 확장)**  
-  현재 `heuristic` 리랭커를 운영 기본값으로 사용 중이므로, 확장 포인트(`RERANK_PROVIDER`)를 활용해 cross-encoder/LLM reranker를 플러그인하고 질의 유형별(`resume/interview/plan`) 정책 분리를 적용합니다.
-
-- **복원성/운영성 강화(스토리지 백엔드 전환)**  
-  현재 파일 기반 저장(SessionMemory, `final_answer_cache.json`)을 유지하되, `STATE_STORE_BACKEND` 스캐폴딩을 활용해 SQLite/외부 스토어로 단계 전환하여 멀티프로세스 동시성/장애 복구/이력 추적을 강화합니다.
-
-- **데이터 거버넌스 강제화(CI 게이트 연계)**  
-  이미 제공된 `scripts/validate_knowledge_metadata.py`를 CI 파이프라인에 `--strict --max-uncategorized-ratio`로 연결해, 메타데이터 누락/카테고리 품질 저하를 배포 전 단계에서 fail-fast로 차단합니다.
+| 필드 | 설명 |
+|---|---|
+| `collected_at` | 문서 수집/업로드 일시(ISO 권장) |
+| `source_url` | 원문 출처 URL |
+| `curator` | 요약/정리 담당자 또는 팀 |
+| `license` | 사용 가능 라이선스/내부 사용 정책 |

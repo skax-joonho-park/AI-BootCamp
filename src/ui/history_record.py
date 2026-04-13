@@ -41,9 +41,9 @@ def _summary_response(payload: dict[str, Any]) -> dict[str, Any]:
         "routing_reason": payload.get("routing_reason"),
         "rag_low_confidence": payload.get("rag_low_confidence"),
         "cached_state_hit": payload.get("cached_state_hit", False),
-        "resume_improvements": list(payload.get("resume_improvements", []) or [])[:5],
-        "interview_preparation": list(payload.get("interview_preparation", []) or [])[:5],
-        "two_week_plan": list(payload.get("two_week_plan", []) or [])[:5],
+        "clause_analysis": list(payload.get("clause_analysis", []) or [])[:5],
+        "risk_findings": list(payload.get("risk_findings", []) or [])[:5],
+        "revision_plan": list(payload.get("revision_plan", []) or [])[:5],
         "input_gap_notice": payload.get("input_gap_notice"),
         "references": compact_refs,
     }
@@ -72,13 +72,13 @@ def migrate_history_record(item: dict[str, Any]) -> dict[str, Any]:
         else "full"
     )
     normalized["query"] = str(normalized.get("query", "") or "")
-    normalized["target_role"] = str(normalized.get("target_role", "백엔드 개발자") or "백엔드 개발자")
+    normalized["document_type"] = str(normalized.get("document_type", "근로계약서") or "근로계약서")
     normalized["session_id"] = str(normalized.get("session_id", "") or "")
     normalized["run_id"] = str(normalized.get("run_id", "") or "")
-    normalized["resume_len"] = _to_int(normalized.get("resume_len", 0), default=0)
-    normalized["jd_len"] = _to_int(normalized.get("jd_len", 0), default=0)
-    normalized["resume_text"] = str(normalized.get("resume_text", "") or "")
-    normalized["jd_text"] = str(normalized.get("jd_text", "") or "")
+    normalized["contract_len"] = _to_int(normalized.get("contract_len", 0), default=0)
+    normalized["ref_len"] = _to_int(normalized.get("ref_len", 0), default=0)
+    normalized["contract_text"] = str(normalized.get("contract_text", "") or "")
+    normalized["reference_text"] = str(normalized.get("reference_text", "") or "")
     if "response" in normalized and not isinstance(normalized.get("response"), dict):
         normalized["response"] = {}
     return normalized
@@ -88,9 +88,9 @@ def build_history_record(
     *,
     session_id: str,
     query: str,
-    target_role: str,
-    resume_text: str,
-    jd_text: str,
+    document_type: str,
+    contract_text: str,
+    reference_text: str,
     response_payload: dict[str, Any],
     run_id: str = "",
     storage_mode: str = "summary",
@@ -101,26 +101,25 @@ def build_history_record(
         "session_id": session_id,
         "run_id": str(run_id or ""),
         "query": query.strip(),
-        "target_role": target_role,
-        "resume_len": len(resume_text or ""),
-        "jd_len": len(jd_text or ""),
-        "resume_hash": _sha256_short(resume_text or ""),
-        "jd_hash": _sha256_short(jd_text or ""),
+        "document_type": document_type,
+        "contract_len": len(contract_text or ""),
+        "ref_len": len(reference_text or ""),
+        "contract_hash": _sha256_short(contract_text or ""),
+        "ref_hash": _sha256_short(reference_text or ""),
         "storage_mode": mode,
     }
     if mode == "full":
         return {
             **base,
-            "resume_text": resume_text,
-            "jd_text": jd_text,
+            "contract_text": contract_text,
+            "reference_text": reference_text,
             "response": response_payload,
         }
     return {
         **base,
-        "resume_text": "",
-        "jd_text": "",
-        "resume_preview": _clip(resume_text, 500),
-        "jd_preview": _clip(jd_text, 500),
+        "contract_text": "",
+        "reference_text": "",
+        "contract_preview": _clip(contract_text, 500),
+        "ref_preview": _clip(reference_text, 500),
         "response": _summary_response(response_payload),
     }
-

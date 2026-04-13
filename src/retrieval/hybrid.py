@@ -15,7 +15,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 from rank_bm25 import BM25Okapi
 
-from src.common import JobPilotError
+from src.common import LegalPilotError
 from src.config import get_embedding_model, load_settings
 from src.retrieval.documents import chunk_documents, iter_source_files, load_documents_with_report
 from src.utils.io import atomic_write_text
@@ -217,7 +217,7 @@ def _normalize_weights(vector_weight: float, bm25_weight: float) -> tuple[float,
 
 
 def _category_diagnostics(chunks: list[Document], uncategorized_warn_threshold: float = 0.5) -> dict[str, Any]:
-    required_categories = {"job_postings", "jd", "interview_guides", "portfolio_examples"}
+    required_categories = {"statutes", "standard_contracts", "case_guides", "contract_examples"}
     distribution: dict[str, int] = {}
     for chunk in chunks:
         category = str(chunk.metadata.get("category", "uncategorized")).strip().lower() or "uncategorized"
@@ -345,7 +345,7 @@ class HybridRetriever:
 
         docs, load_failures = load_documents_with_report(settings.knowledge_dir)
         if not docs:
-            raise JobPilotError(
+            raise LegalPilotError(
                 error_code="KNOWLEDGE_EMPTY",
                 detail=(
                     f"No knowledge documents found in {settings.knowledge_dir}. "

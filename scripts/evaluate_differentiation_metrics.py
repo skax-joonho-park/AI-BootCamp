@@ -22,7 +22,7 @@ from src.evaluation.metrics import (  # noqa: E402
     routing_accuracy,
 )
 from src.config.settings import load_settings  # noqa: E402
-from src.workflow import JobPilotService  # noqa: E402
+from src.workflow import LegalPilotService  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -40,7 +40,7 @@ def parse_args() -> argparse.Namespace:
         "--min-per-labeled-route",
         type=int,
         default=4,
-        help="Minimum number of cases for each labeled route(full/resume_only/interview_only/plan_only).",
+        help="Minimum number of cases for each labeled route(full_review/clause_only/risk_only/advice_only).",
     )
     parser.add_argument(
         "--min-ambiguous-cases",
@@ -76,7 +76,7 @@ def _load_cases(path: Path) -> list[dict]:
 
 def _requires_plan(route: str) -> bool:
     route_key = (route or "").strip().lower()
-    return route_key in {"full", "plan_only"}
+    return route_key in {"full_review", "advice_only"}
 
 
 def _normalized_route(value: str) -> str:
@@ -97,7 +97,7 @@ def _validate_case_distribution(
     min_ambiguous_cases: int,
 ) -> list[str]:
     failures: list[str] = []
-    for route in ("resume_only", "interview_only", "plan_only", "full"):
+    for route in ("clause_only", "risk_only", "advice_only", "full_review"):
         if counter.get(route, 0) < min_per_labeled_route:
             failures.append(
                 f"[FAIL] case distribution: '{route}'={counter.get(route, 0)} < {min_per_labeled_route}"
@@ -148,7 +148,7 @@ def _run_once(
             os.environ["RERANK_ENABLED"] = "true" if rerank_enabled_override else "false"
         load_settings.cache_clear()
 
-        service = JobPilotService()
+        service = LegalPilotService()
         routing_samples: list[RoutingSampleResult] = []
         reference_samples: list[AnswerQualitySample] = []
         plan_quality_samples: list[AnswerQualitySample] = []
@@ -158,9 +158,9 @@ def _run_once(
             state = {
                 "session_id": session_id,
                 "user_query": str(case.get("query", "")),
-                "target_role": str(case.get("target_role", "백엔드 개발자")),
-                "resume_text": str(case.get("resume_text", "")),
-                "jd_text": str(case.get("jd_text", "")),
+                "document_type": str(case.get("document_type", "근로계약서")),
+                "contract_text": str(case.get("contract_text", "")),
+                "reference_text": str(case.get("reference_text", "")),
             }
             result = service.graph.invoke(
                 state,
@@ -168,9 +168,9 @@ def _run_once(
             )
             final_answer = result.get("final_answer", {}) if isinstance(result, dict) else {}
             refs = final_answer.get("references", []) if isinstance(final_answer, dict) else []
-            plans = final_answer.get("two_week_plan", []) if isinstance(final_answer, dict) else []
+            plans = final_answer.get("revision_plan", []) if isinstance(final_answer, dict) else []
             references = refs if isinstance(refs, list) else []
-            two_week_plan = plans if isinstance(plans, list) else []
+            revision_plan = plans if isinstance(plans, list) else []
 
             predicted_route = str(result.get("route", "unknown"))
             expected_route = str(case.get("expected_route", ""))
@@ -184,7 +184,7 @@ def _run_once(
                 )
             sample = AnswerQualitySample(
                 references=references,
-                two_week_plan=[str(item) for item in two_week_plan],
+                revision_plan=[str(item) for item in revision_plan],
             )
             reference_samples.append(sample)
             if _requires_plan(eval_route):
@@ -196,7 +196,7 @@ def _run_once(
                     "predicted_route": predicted_route,
                     "eval_route": eval_route,
                     "references_count": len(references),
-                    "plan_items_count": len(two_week_plan),
+                    "plan_items_count": len(revision_plan),
                 }
             )
         routing = routing_accuracy(routing_samples) if routing_samples else 0.0
@@ -241,10 +241,10 @@ def main() -> None:
     report_lines.append(f"Cases: {len(cases)}")
     report_lines.append(
         "Case distribution: "
-        f"resume_only={case_counter.get('resume_only', 0)}, "
-        f"interview_only={case_counter.get('interview_only', 0)}, "
-        f"plan_only={case_counter.get('plan_only', 0)}, "
-        f"full={case_counter.get('full', 0)}, "
+        f"clause_only={case_counter.get('clause_only', 0)}, "
+        f"risk_only={case_counter.get('risk_only', 0)}, "
+        f"advice_only={case_counter.get('advice_only', 0)}, "
+        f"full_review={case_counter.get('full_review', 0)}, "
         f"ambiguous={case_counter.get('ambiguous', 0)}"
     )
     if routing_samples:
@@ -252,7 +252,7 @@ def main() -> None:
     else:
         report_lines.append("Routing accuracy: n/a (expected_route not provided)")
     report_lines.append(f"Reference inclusion rate: {ref_rate:.2%}")
-    report_lines.append(f"Plan quality rate (full/plan_only): {plan_rate:.2%}")
+    report_lines.append(f"Plan quality rate (full_review/advice_only): {plan_rate:.2%}")
     report_lines.append(f"Reference duplicate-source ratio: {dup_rate:.2%}")
     if routing_samples:
         labels, matrix = _confusion_matrix(routing_samples)

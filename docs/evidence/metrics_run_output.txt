@@ -1,49 +1,12 @@
 === Differentiation Metrics ===
 Cases: 25
-Case distribution: resume_only=5, interview_only=5, plan_only=5, full=5, ambiguous=5
-Routing accuracy: 95.00%
-Reference inclusion rate: 100.00%
-Plan quality rate (full/plan_only): 100.00%
+Case distribution: clause_only=5, risk_only=5, advice_only=5, full_review=5, ambiguous=5
+Routing accuracy: (재생성 필요 — scripts/evaluate_differentiation_metrics.py 실행)
+Reference inclusion rate: (재생성 필요)
+Plan quality rate (full_review/advice_only): (재생성 필요)
 
-Routing confusion matrix (rows=expected, cols=predicted):
-expected\pred | full | interview_only | plan_only | resume_only
---- | --- | --- | --- | ---
-full | 5 | 0 | 0 | 0
-interview_only | 0 | 5 | 0 | 0
-plan_only | 0 | 0 | 5 | 0
-resume_only | 0 | 0 | 1 | 4
-
-Route recall:
-- full: 100.00% (5/5)
-- interview_only: 100.00% (5/5)
-- plan_only: 100.00% (5/5)
-- resume_only: 80.00% (4/5)
-- macro_recall: 95.00%
-
-=== Case Details ===
-{"query": "이력서 개선 포인트 5개만 뽑아줘. 면접은 제외해줘.", "expected_route": "resume_only", "predicted_route": "resume_only", "eval_route": "resume_only", "references_count": 4, "plan_items_count": 0}
-{"query": "면접 질문과 답변 방향만 준비해줘.", "expected_route": "interview_only", "predicted_route": "interview_only", "eval_route": "interview_only", "references_count": 4, "plan_items_count": 0}
-{"query": "이력서와 면접을 같이 준비할 수 있게 2주 계획까지 만들어줘.", "expected_route": "full", "predicted_route": "full", "eval_route": "full", "references_count": 4, "plan_items_count": 4}
-{"query": "전체 요약 없이 2주 실행계획만 간단히 작성해줘.", "expected_route": "plan_only", "predicted_route": "plan_only", "eval_route": "plan_only", "references_count": 2, "plan_items_count": 4}
-{"query": "면접도 조금 보고 싶고 이력서도 손보고 싶은데, 계획은 너무 길지 않게 정리해줘.", "expected_route": "", "predicted_route": "full", "eval_route": "full", "references_count": 4, "plan_items_count": 4}
-{"query": "계획은 간단히만 보고 싶고, 이력서/면접은 핵심만 2~3개씩 알려줘.", "expected_route": "", "predicted_route": "full", "eval_route": "full", "references_count": 4, "plan_items_count": 4}
-{"query": "이력서는 제외하고 면접 질문/답변 방향만 준비해줘. 2주 계획도 제외.", "expected_route": "interview_only", "predicted_route": "interview_only", "eval_route": "interview_only", "references_count": 4, "plan_items_count": 0}
-{"query": "면접은 제외하고 JD 대비 이력서 갭만 집중해서 정리해줘. 계획은 빼줘.", "expected_route": "resume_only", "predicted_route": "resume_only", "eval_route": "resume_only", "references_count": 4, "plan_items_count": 0}
-{"query": "전체 요약 없이 2주 계획만 다시 작성해줘.", "expected_route": "plan_only", "predicted_route": "plan_only", "eval_route": "plan_only", "references_count": 2, "plan_items_count": 4}
-{"query": "이력서만 빠르게 고쳐줘. 면접이랑 계획은 제외해.", "expected_route": "resume_only", "predicted_route": "resume_only", "eval_route": "resume_only", "references_count": 4, "plan_items_count": 0}
-{"query": "면접 준비만 하고 싶어. 이력서/2주 계획은 빼줘.", "expected_route": "interview_only", "predicted_route": "interview_only", "eval_route": "interview_only", "references_count": 4, "plan_items_count": 0}
-{"query": "2주 실행 계획만 우선 받고 싶어. 전체 요약은 짧게.", "expected_route": "plan_only", "predicted_route": "plan_only", "eval_route": "plan_only", "references_count": 2, "plan_items_count": 4}
-{"query": "이력서랑 면접 모두 준비해줘. 계획은 포함해도 되고 안 해도 돼.", "expected_route": "", "predicted_route": "full", "eval_route": "full", "references_count": 4, "plan_items_count": 4}
-{"query": "무엇부터 해야 할지 모르겠어. 지금 상태에서 가장 급한 것만 정리해줘.", "expected_route": "", "predicted_route": "plan_only", "eval_route": "plan_only", "references_count": 2, "plan_items_count": 4}
-{"query": "내 이력서와 JD 기준으로 부족 역량과 면접 대비를 같이 보고 싶어.", "expected_route": "full", "predicted_route": "full", "eval_route": "full", "references_count": 4, "plan_items_count": 4}
-{"query": "면접 제외하고 실무 액션 위주로만 정리해줘.", "expected_route": "resume_only", "predicted_route": "resume_only", "eval_route": "resume_only", "references_count": 4, "plan_items_count": 0}
-{"query": "이력서와 계획은 제외하고 면접 질문/답변만 핵심 5개 줘.", "expected_route": "interview_only", "predicted_route": "interview_only", "eval_route": "interview_only", "references_count": 4, "plan_items_count": 0}
-{"query": "이직 준비 도와줘.", "expected_route": "", "predicted_route": "full", "eval_route": "full", "references_count": 4, "plan_items_count": 4}
-{"query": "면접은 제외하고 계획만 작성해줘.", "expected_route": "plan_only", "predicted_route": "plan_only", "eval_route": "plan_only", "references_count": 2, "plan_items_count": 4}
-{"query": "면접 제외 + 계획만. 이력서는 보지 말아줘.", "expected_route": "plan_only", "predicted_route": "plan_only", "eval_route": "plan_only", "references_count": 2, "plan_items_count": 4}
-{"query": "이력서랑 계획은 빼고 면접 준비만 해줘. 핵심 질문 5개.", "expected_route": "interview_only", "predicted_route": "interview_only", "eval_route": "interview_only", "references_count": 4, "plan_items_count": 0}
-{"query": "면접만 제외하고 나머지(이력서+계획)는 진행해줘.", "expected_route": "resume_only", "predicted_route": "plan_only", "eval_route": "resume_only", "references_count": 2, "plan_items_count": 4}
-{"query": "JD 대비 이력서 개선과 면접 준비를 같이 하고, 2주 실행계획까지 만들어줘.", "expected_route": "full", "predicted_route": "full", "eval_route": "full", "references_count": 4, "plan_items_count": 4}
-{"query": "이직 준비를 전체로 도와줘. 이력서/면접/실행계획을 한 번에 정리해줘.", "expected_route": "full", "predicted_route": "full", "eval_route": "full", "references_count": 4, "plan_items_count": 4}
-{"query": "공고와 이력서를 비교해서 개선점, 면접 대비, 2주 플랜까지 통합 코칭해줘.", "expected_route": "full", "predicted_route": "full", "eval_route": "full", "references_count": 4, "plan_items_count": 4}
-[PASS] All thresholds satisfied.
+이 파일은 LegalPilot 도메인 전환 후 아직 재실행되지 않았습니다.
+재생성 명령:
+  python scripts/evaluate_differentiation_metrics.py \
+    --cases data/eval/sample_queries.json \
+    --output docs/evidence/metrics_run_output.txt

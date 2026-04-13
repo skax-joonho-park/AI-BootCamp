@@ -16,40 +16,44 @@ from functools import lru_cache
 from langchain_core.tools import tool
 
 
-def _infer_role_keywords(target_role: str) -> tuple[str, list[str], list[str]]:
-    role_required = {
-        "백엔드": ["python", "api", "database", "sql", "cloud", "docker", "fastapi", "django"],
-        "데이터": ["sql", "python", "분석", "통계", "모델", "시각화", "etl"],
-        "pm": ["우선순위", "협업", "지표", "로드맵", "의사결정", "커뮤니케이션"],
+def _infer_document_keywords(document_type: str) -> tuple[str, list[str], list[str]]:
+    doc_required = {
+        "근로계약서": ["임금", "근로시간", "휴가", "업무내용", "계약기간", "해고", "퇴직금"],
+        "임대차계약서": ["임대료", "보증금", "임대기간", "관리비", "원상복구", "갱신", "해지"],
+        "nda": ["비밀정보", "기밀", "공개금지", "유효기간", "손해배상", "반환"],
+        "용역계약서": ["용역범위", "납기", "대가", "지적재산권", "하자보증", "해제"],
     }
-    role_preferred = {
-        "백엔드": ["kafka", "redis", "msa", "모니터링", "테스트 자동화"],
-        "데이터": ["실험", "a/b", "대시보드", "데이터 파이프라인", "가설 검증"],
-        "pm": ["가설", "실험", "백로그", "이해관계자", "리스크 관리"],
+    doc_preferred = {
+        "근로계약서": ["연장근로", "포괄임금", "경업금지", "전직금지", "손해배상"],
+        "임대차계약서": ["분쟁조정", "중도해지", "특약사항", "인테리어", "원상회복"],
+        "nda": ["위약벌", "유지보수", "제3자", "공개예외", "관할법원"],
+        "용역계약서": ["변경계약", "지체상금", "검수기준", "분쟁해결", "원하청"],
     }
 
-    key = "백엔드"
-    lowered = target_role.lower()
-    if "데이터" in target_role or "data" in lowered:
-        key = "데이터"
-    elif "pm" in lowered:
-        key = "pm"
-    return key, role_required[key], role_preferred[key]
+    key = "근로계약서"
+    lowered = document_type.lower()
+    if "임대" in document_type or "임차" in document_type or "전세" in lowered:
+        key = "임대차계약서"
+    elif "nda" in lowered or "비밀" in document_type or "기밀" in document_type:
+        key = "nda"
+    elif "용역" in document_type or "도급" in document_type or "위탁" in document_type:
+        key = "용역계약서"
+    return key, doc_required[key], doc_preferred[key]
 
 
 _SYNONYM_CANONICAL = {
-    "rdbms": "database",
-    "db": "database",
-    "mysql": "sql",
-    "postgresql": "sql",
-    "postgres": "sql",
-    "fastapi": "fastapi",
-    "fast-api": "fastapi",
-    "backend": "백엔드",
-    "back-end": "백엔드",
-    "pm": "pm",
-    "productmanager": "pm",
-    "k8s": "kubernetes",
+    "임금": "임금",
+    "급여": "임금",
+    "월급": "임금",
+    "보수": "임금",
+    "전세": "보증금",
+    "월세": "임대료",
+    "해고": "해고",
+    "해임": "해고",
+    "파면": "해고",
+    "nda": "nda",
+    "비밀유지": "nda",
+    "기밀유지": "nda",
 }
 
 
@@ -87,10 +91,11 @@ def _expand_keyword_aliases(keyword: str) -> set[str]:
     if not base:
         return set()
     aliases: dict[str, set[str]] = {
-        "database": {"database", "db", "rdbms", "mysql", "postgres", "postgresql"},
-        "sql": {"sql", "mysql", "postgres", "postgresql"},
-        "fastapi": {"fastapi", "fast-api"},
-        "백엔드": {"백엔드", "backend", "back-end"},
+        "임금": {"임금", "급여", "월급", "보수"},
+        "보증금": {"보증금", "전세"},
+        "임대료": {"임대료", "월세"},
+        "해고": {"해고", "해임", "파면"},
+        "nda": {"nda", "비밀유지", "기밀유지"},
     }
     for canonical, words in aliases.items():
         if base in words:
@@ -99,90 +104,97 @@ def _expand_keyword_aliases(keyword: str) -> set[str]:
 
 
 @tool
-def resume_keyword_match_score(resume_text: str, target_role: str) -> str:
-    """Estimate keyword match score of a resume for a target role."""
-    key, role_keywords, _ = _infer_role_keywords(target_role)
-    tokens = _tokenize(resume_text)
+def clause_keyword_match_score(contract_text: str, document_type: str) -> str:
+    """Estimate keyword coverage score of a contract for a given document type."""
+    key, doc_keywords, _ = _infer_document_keywords(document_type)
+    tokens = _tokenize(contract_text)
     matched: list[str] = []
-    for keyword in role_keywords:
+    for keyword in doc_keywords:
         aliases = _expand_keyword_aliases(keyword)
         if aliases & tokens:
             matched.append(keyword)
-    score = int((len(matched) / max(len(role_keywords), 1)) * 100)
+    score = int((len(matched) / max(len(doc_keywords), 1)) * 100)
     payload = {
-        "target_role": target_role,
-        "role_key": key,
+        "document_type": document_type,
+        "doc_key": key,
         "match_score": score,
         "matched_keywords": matched,
-        "missing_keywords": [kw for kw in role_keywords if kw not in matched],
+        "missing_keywords": [kw for kw in doc_keywords if kw not in matched],
     }
     return json.dumps(payload, ensure_ascii=False)
 
 
 @tool
-def interview_question_bank(target_role: str) -> str:
-    """Return common interview question sets for a role."""
+def legal_issue_bank(document_type: str) -> str:
+    """Return common legal issues and risk areas for a given document type."""
     mapping = {
-        "백엔드": [
-            "대규모 트래픽 상황에서 API 성능을 개선한 경험을 설명해 주세요.",
-            "트랜잭션 격리 수준과 데드락 해결 경험을 말해 주세요.",
-            "장애 대응 프로세스를 본인이 주도한 사례가 있나요?",
+        "근로계약서": [
+            "포괄임금제 적용 시 연장·야간·휴일 수당 미지급 가능성을 확인하세요.",
+            "계약기간 및 갱신 거절 요건이 근로기준법과 부합하는지 검토하세요.",
+            "경업금지·비밀유지 조항의 기간·범위가 과도하게 설정되었는지 살펴보세요.",
         ],
-        "데이터": [
-            "모델 성능보다 비즈니스 임팩트가 중요했던 프로젝트 경험은?",
-            "데이터 품질 이슈를 발견하고 해결한 과정을 설명해 주세요.",
-            "A/B 테스트 결과를 의사결정에 어떻게 연결했나요?",
+        "임대차계약서": [
+            "임대인의 일방적 계약 해지 조항이 임차인에게 불리하게 설정되어 있는지 확인하세요.",
+            "보증금 반환 시기 및 원상복구 범위가 명확히 규정되어 있는지 검토하세요.",
+            "묵시적 갱신 거절 통지 기한이 주택임대차보호법 기준에 부합하는지 살펴보세요.",
         ],
-        "pm": [
-            "우선순위 충돌 상황에서 어떤 기준으로 의사결정했나요?",
-            "실패했던 기능 출시 사례와 학습한 점을 말해 주세요.",
-            "개발/디자인/사업 부서 협업 갈등을 해결한 경험은?",
+        "nda": [
+            "비밀정보의 정의 범위가 지나치게 광범위해 사업 활동을 제한할 수 있는지 검토하세요.",
+            "비밀유지 의무 유효기간이 계약 종료 후에도 과도하게 지속되는지 확인하세요.",
+            "위반 시 손해배상 조항이 실제 손해를 초과하는 위약벌 성격인지 살펴보세요.",
+        ],
+        "용역계약서": [
+            "지체상금 조항의 상한이 없거나 지나치게 높게 설정되어 있는지 확인하세요.",
+            "결과물의 지적재산권 귀속 및 사용 범위가 명확히 규정되어 있는지 검토하세요.",
+            "하자보수 기간 및 책임 범위가 수급인에게 일방적으로 불리한지 살펴보세요.",
         ],
     }
-    key = "백엔드"
-    lowered = target_role.lower()
-    if "데이터" in target_role or "data" in lowered:
-        key = "데이터"
-    elif "pm" in lowered:
-        key = "pm"
+    key = "근로계약서"
+    lowered = document_type.lower()
+    if "임대" in document_type or "임차" in document_type or "전세" in lowered:
+        key = "임대차계약서"
+    elif "nda" in lowered or "비밀" in document_type or "기밀" in document_type:
+        key = "nda"
+    elif "용역" in document_type or "도급" in document_type or "위탁" in document_type:
+        key = "용역계약서"
     payload = {
-        "target_role": target_role,
-        "role_key": key,
-        "questions": mapping[key],
+        "document_type": document_type,
+        "doc_key": key,
+        "issues": mapping[key],
     }
     return json.dumps(payload, ensure_ascii=False)
 
 
 @tool
-def jd_resume_gap_score(jd_text: str, resume_text: str, target_role: str) -> str:
-    """Quantify JD-Resume gap with required/preferred keyword matching."""
-    _, required_keywords, preferred_keywords = _infer_role_keywords(target_role)
-    jd_tokens = _tokenize(jd_text)
-    resume_tokens = _tokenize(resume_text)
+def contract_reference_gap_score(reference_text: str, contract_text: str, document_type: str) -> str:
+    """Quantify gap between a reference law/standard contract and the target contract."""
+    _, required_keywords, preferred_keywords = _infer_document_keywords(document_type)
+    ref_tokens = _tokenize(reference_text)
+    contract_tokens = _tokenize(contract_text)
 
-    jd_required = [
-        kw for kw in required_keywords if _expand_keyword_aliases(kw) & jd_tokens
+    ref_required = [
+        kw for kw in required_keywords if _expand_keyword_aliases(kw) & ref_tokens
     ] or required_keywords
-    jd_preferred = [kw for kw in preferred_keywords if _expand_keyword_aliases(kw) & jd_tokens]
+    ref_preferred = [kw for kw in preferred_keywords if _expand_keyword_aliases(kw) & ref_tokens]
 
-    matched_required = [kw for kw in jd_required if _expand_keyword_aliases(kw) & resume_tokens]
-    missing_required = [kw for kw in jd_required if not (_expand_keyword_aliases(kw) & resume_tokens)]
-    matched_preferred = [kw for kw in jd_preferred if _expand_keyword_aliases(kw) & resume_tokens]
-    missing_preferred = [kw for kw in jd_preferred if not (_expand_keyword_aliases(kw) & resume_tokens)]
+    matched_required = [kw for kw in ref_required if _expand_keyword_aliases(kw) & contract_tokens]
+    missing_required = [kw for kw in ref_required if not (_expand_keyword_aliases(kw) & contract_tokens)]
+    matched_preferred = [kw for kw in ref_preferred if _expand_keyword_aliases(kw) & contract_tokens]
+    missing_preferred = [kw for kw in ref_preferred if not (_expand_keyword_aliases(kw) & contract_tokens)]
 
     required_match_rate = round(
-        (len(matched_required) / max(len(jd_required), 1)) * 100.0,
+        (len(matched_required) / max(len(ref_required), 1)) * 100.0,
         2,
     )
     preferred_match_rate = round(
-        (len(matched_preferred) / max(len(jd_preferred), 1)) * 100.0,
+        (len(matched_preferred) / max(len(ref_preferred), 1)) * 100.0,
         2,
-    ) if jd_preferred else 0.0
+    ) if ref_preferred else 0.0
 
     payload = {
-        "target_role": target_role,
-        "jd_required_keywords": jd_required,
-        "jd_preferred_keywords": jd_preferred,
+        "document_type": document_type,
+        "ref_required_keywords": ref_required,
+        "ref_preferred_keywords": ref_preferred,
         "matched_required_keywords": matched_required,
         "missing_required_top": missing_required[:5],
         "matched_preferred_keywords": matched_preferred,

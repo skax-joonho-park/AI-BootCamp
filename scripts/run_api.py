@@ -1,4 +1,4 @@
-"""Run FastAPI server for JobPilot."""
+"""Run FastAPI server for LegalPilot."""
 
 from __future__ import annotations
 

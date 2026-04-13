@@ -1,4 +1,4 @@
-"""Streamlit UI for JobPilot AI."""
+"""Streamlit UI for LegalPilot AI."""
 
 from __future__ import annotations
 
@@ -11,23 +11,23 @@ from uuid import uuid4
 import streamlit as st
 from filelock import FileLock
 
-from src.common import JobPilotError
+from src.common import LegalPilotError
 from src.config import load_settings
 from src.ui.history_record import HISTORY_RECORD_VERSION, build_history_record, migrate_history_record
 from src.ui.input_merge import merge_uploaded_text
 from src.utils.file_extract import extract_text_from_upload
 from src.utils.io import atomic_write_text
 from src.utils.pii import mask_pii_payload
-from src.workflow import ChatRequest, JobPilotService
+from src.workflow import ChatRequest, LegalPilotService
 
 MAX_QUERY_CHARS = 1500
-DEFAULT_MAX_RESUME_CHARS = 30000
-DEFAULT_MAX_JD_CHARS = 12000
+DEFAULT_MAX_CONTRACT_CHARS = 30000
+DEFAULT_MAX_REF_CHARS = 12000
 
 
 @st.cache_resource(show_spinner="지식 인덱스 생성/로딩 중입니다. 첫 실행은 다소 시간이 걸릴 수 있습니다...")
-def get_service() -> JobPilotService:
-    return JobPilotService()
+def get_service() -> LegalPilotService:
+    return LegalPilotService()
 
 
 def _history_file_path() -> Path:
@@ -103,7 +103,7 @@ def _show_error_by_code(error_code: str, detail: str) -> None:
         with st.expander("해결 가이드", expanded=False):
             st.markdown(
                 "- 1) `data/knowledge` 아래에 최소 1개 문서를 추가하세요.\n"
-                "- 2) 예: `job_postings/sample_jd.md`, `interview_guides/backend_qna.txt`\n"
+                "- 2) 예: `statutes/근로기준법_요약.md`, `standard_contracts/표준_근로계약서.txt`\n"
                 "- 3) 다시 `에이전트 실행`을 누르세요."
             )
         return
@@ -158,11 +158,11 @@ def run() -> None:
     settings = load_settings()
     page_icon = _resolve_page_icon(settings)
     if page_icon is None:
-        st.set_page_config(page_title="JobPilot AI", layout="wide")
+        st.set_page_config(page_title="LegalPilot AI", layout="wide")
     else:
-        st.set_page_config(page_title="JobPilot AI", page_icon=page_icon, layout="wide")
-    st.title("JobPilot AI - 취업/이직 멀티 에이전트 코파일럿")
-    st.caption("Resume Agent + Interview Agent + RAG Agent")
+        st.set_page_config(page_title="LegalPilot AI", page_icon=page_icon, layout="wide")
+    st.title("LegalPilot AI - 법률 문서 검토 멀티 에이전트")
+    st.caption("Clause Analyzer + Risk Detection + Revision Advisor + RAG Agent")
 
     if "session_id" not in st.session_state:
         st.session_state.session_id = f"session-{uuid4().hex[:8]}"
@@ -176,36 +176,36 @@ def run() -> None:
         )
     if "_persist_history_prev" not in st.session_state:
         st.session_state._persist_history_prev = st.session_state.persist_history_enabled
-    if "resume_text_input" not in st.session_state:
-        st.session_state.resume_text_input = ""
+    if "contract_text_input" not in st.session_state:
+        st.session_state.contract_text_input = ""
     if "query_input" not in st.session_state:
         st.session_state.query_input = ""
-    if "target_role_input" not in st.session_state:
-        st.session_state.target_role_input = "백엔드 개발자"
-    if "jd_text_input" not in st.session_state:
-        st.session_state.jd_text_input = ""
+    if "document_type_input" not in st.session_state:
+        st.session_state.document_type_input = "근로계약서"
+    if "reference_text_input" not in st.session_state:
+        st.session_state.reference_text_input = ""
     if "last_response" not in st.session_state:
         st.session_state.last_response = None
     if "last_response_origin" not in st.session_state:
         st.session_state.last_response_origin = ""
-    if "max_resume_chars" not in st.session_state:
-        st.session_state.max_resume_chars = DEFAULT_MAX_RESUME_CHARS
-    if "auto_compress_resume" not in st.session_state:
-        st.session_state.auto_compress_resume = False
-    if "resume_target_chars" not in st.session_state:
-        st.session_state.resume_target_chars = 18000
-    if "max_jd_chars" not in st.session_state:
-        st.session_state.max_jd_chars = DEFAULT_MAX_JD_CHARS
-    if "auto_compress_jd" not in st.session_state:
-        st.session_state.auto_compress_jd = False
-    if "jd_target_chars" not in st.session_state:
-        st.session_state.jd_target_chars = 8000
+    if "max_contract_chars" not in st.session_state:
+        st.session_state.max_contract_chars = DEFAULT_MAX_CONTRACT_CHARS
+    if "auto_compress_contract" not in st.session_state:
+        st.session_state.auto_compress_contract = False
+    if "contract_target_chars" not in st.session_state:
+        st.session_state.contract_target_chars = 18000
+    if "max_ref_chars" not in st.session_state:
+        st.session_state.max_ref_chars = DEFAULT_MAX_REF_CHARS
+    if "auto_compress_ref" not in st.session_state:
+        st.session_state.auto_compress_ref = False
+    if "ref_target_chars" not in st.session_state:
+        st.session_state.ref_target_chars = 8000
     if "upload_apply_mode" not in st.session_state:
         st.session_state.upload_apply_mode = "덮어쓰기"
-    if "last_resume_upload_sig" not in st.session_state:
-        st.session_state.last_resume_upload_sig = ""
-    if "last_jd_upload_sig" not in st.session_state:
-        st.session_state.last_jd_upload_sig = ""
+    if "last_contract_upload_sig" not in st.session_state:
+        st.session_state.last_contract_upload_sig = ""
+    if "last_ref_upload_sig" not in st.session_state:
+        st.session_state.last_ref_upload_sig = ""
     if "show_debug_meta" not in st.session_state:
         st.session_state.show_debug_meta = False
     if "show_reference_metadata" not in st.session_state:
@@ -218,10 +218,10 @@ def run() -> None:
         st.caption("세션은 내부적으로 자동 관리됩니다.")
         if st.button("새 대화 시작", use_container_width=True):
             st.session_state.session_id = f"session-{uuid4().hex[:8]}"
-            st.session_state.resume_text_input = ""
-            st.session_state.jd_text_input = ""
+            st.session_state.contract_text_input = ""
+            st.session_state.reference_text_input = ""
             st.session_state.query_input = ""
-            st.session_state.target_role_input = "백엔드 개발자"
+            st.session_state.document_type_input = "근로계약서"
             st.session_state.last_response = None
             st.success("새 세션으로 전환되었습니다.")
             st.rerun()
@@ -235,8 +235,8 @@ def run() -> None:
                     real_idx = len(history) - idx
                     st.markdown(f"**{idx}. {item['query']}**")
                     st.caption(
-                        f"직무: {item['target_role']} | 세션: {item['session_id']} | "
-                        f"이력서 길이: {item['resume_len']}자 | JD 길이: {item.get('jd_len', 0)}자 | "
+                        f"유형: {item.get('document_type', 'n/a')} | 세션: {item['session_id']} | "
+                        f"계약서 길이: {item.get('contract_len', 0)}자 | 참조 길이: {item.get('ref_len', 0)}자 | "
                         f"run_id: {item.get('run_id', 'n/a')} | "
                         f"저장모드: {item.get('storage_mode', 'full')} | "
                         f"스키마 v{item.get('record_version', 1)}"
@@ -245,9 +245,9 @@ def run() -> None:
                     if col_a.button("다시 불러오기", key=f"load_{real_idx}", use_container_width=True):
                         st.session_state.session_id = item.get("session_id", st.session_state.session_id)
                         st.session_state.query_input = item.get("query", "")
-                        st.session_state.target_role_input = item.get("target_role", "백엔드 개발자")
-                        st.session_state.resume_text_input = item.get("resume_text", "")
-                        st.session_state.jd_text_input = item.get("jd_text", "")
+                        st.session_state.document_type_input = item.get("document_type", "근로계약서")
+                        st.session_state.contract_text_input = item.get("contract_text", "")
+                        st.session_state.reference_text_input = item.get("reference_text", "")
                         loaded_response = item.get("response") if isinstance(item.get("response"), dict) else {}
                         loaded_response = dict(loaded_response or {})
                         loaded_response["run_id"] = str(
@@ -262,7 +262,7 @@ def run() -> None:
                         )
                         st.session_state.last_response = loaded_response
                         st.session_state.last_response_origin = "history_load"
-                        st.info("질문/직무/JD/이력서/결과를 복원했습니다.")
+                        st.info("질문/유형/참조법령/계약서/결과를 복원했습니다.")
                         st.rerun()
                     if col_b.button("삭제", key=f"delete_{real_idx}", use_container_width=True):
                         del st.session_state.input_history[real_idx]
@@ -276,22 +276,22 @@ def run() -> None:
                     st.rerun()
 
         st.selectbox(
-            "목표 직무",
-            ["백엔드 개발자", "데이터 분석가", "PM"],
-            key="target_role_input",
+            "계약서 유형",
+            ["근로계약서", "임대차계약서", "NDA", "용역계약서"],
+            key="document_type_input",
         )
         with st.expander("대용량 입력 방어 설정", expanded=False):
             st.number_input(
-                "이력서 최대 글자 수(하드 제한)",
+                "계약서 최대 글자 수(하드 제한)",
                 min_value=5000,
                 max_value=50000,
                 step=1000,
-                key="max_resume_chars",
+                key="max_contract_chars",
                 help="이 값을 초과하면 실행 전에 차단됩니다.",
             )
             st.checkbox(
-                "긴 이력서 자동 압축(앞/뒤 핵심만 유지)",
-                key="auto_compress_resume",
+                "긴 계약서 자동 압축(앞/뒤 핵심만 유지)",
+                key="auto_compress_contract",
                 help="업로드/입력된 텍스트가 길면 앞/뒤 중심으로 자동 압축합니다.",
             )
             st.number_input(
@@ -299,29 +299,29 @@ def run() -> None:
                 min_value=2000,
                 max_value=30000,
                 step=500,
-                key="resume_target_chars",
-                disabled=not st.session_state.auto_compress_resume,
+                key="contract_target_chars",
+                disabled=not st.session_state.auto_compress_contract,
             )
             st.number_input(
-                "JD/공고 최대 글자 수(하드 제한)",
+                "참조 법령/표준 계약서 최대 글자 수(하드 제한)",
                 min_value=2000,
                 max_value=30000,
                 step=500,
-                key="max_jd_chars",
-                help="JD/공고 텍스트 입력 제한입니다.",
+                key="max_ref_chars",
+                help="참조 법령/표준 계약서 텍스트 입력 제한입니다.",
             )
             st.checkbox(
-                "긴 JD/공고 자동 압축(앞/뒤 핵심만 유지)",
-                key="auto_compress_jd",
-                help="JD/공고 텍스트가 길면 앞/뒤 중심으로 자동 압축합니다.",
+                "긴 참조 텍스트 자동 압축(앞/뒤 핵심만 유지)",
+                key="auto_compress_ref",
+                help="참조 법령/표준 계약서 텍스트가 길면 앞/뒤 중심으로 자동 압축합니다.",
             )
             st.number_input(
-                "JD 자동 압축 목표 글자 수",
+                "참조 텍스트 자동 압축 목표 글자 수",
                 min_value=1500,
                 max_value=20000,
                 step=500,
-                key="jd_target_chars",
-                disabled=not st.session_state.auto_compress_jd,
+                key="ref_target_chars",
+                disabled=not st.session_state.auto_compress_ref,
             )
             st.radio(
                 "업로드 텍스트 반영 방식",
@@ -425,7 +425,7 @@ def run() -> None:
 
     st.text_area(
         "질문/요청",
-        placeholder="예) 백엔드 이직을 위해 이력서 개선 포인트와 2주 계획을 만들어줘",
+        placeholder="예) 근로계약서의 포괄임금제 조항이 적법한지 검토하고 위험 요소를 알려줘",
         key="query_input",
         max_chars=MAX_QUERY_CHARS,
         help=f"최대 {MAX_QUERY_CHARS:,}자까지 입력할 수 있습니다. 입력 중 글자 수가 실시간 표시됩니다.",
@@ -434,111 +434,111 @@ def run() -> None:
         f"질문/요청은 최대 {MAX_QUERY_CHARS:,}자까지 입력 가능합니다. "
         "입력창 내부 카운터가 실시간 기준입니다."
     )
-    uploaded_resume = st.file_uploader(
-        "이력서 파일 업로드(선택)",
+    uploaded_contract = st.file_uploader(
+        "계약서 파일 업로드(선택) — CSV 파일은 텍스트 변환 후 업로드 권장",
         type=["txt", "md", "csv", "pdf", "docx", "xlsx"],
-        help="업로드하면 파일 내용이 아래 이력서 텍스트에 자동 반영됩니다.",
+        help="업로드하면 파일 내용이 아래 계약서 원문에 자동 반영됩니다.",
     )
-    uploaded_jd = st.file_uploader(
-        "JD/공고 파일 업로드(선택)",
+    uploaded_ref = st.file_uploader(
+        "참조 법령/표준 계약서 파일 업로드(선택) — CSV 파일은 텍스트 변환 후 업로드 권장",
         type=["txt", "md", "csv", "pdf", "docx", "xlsx"],
-        help="업로드하면 파일 내용이 아래 JD/공고 텍스트에 자동 반영됩니다.",
+        help="업로드하면 파일 내용이 아래 참조 텍스트에 자동 반영됩니다.",
     )
 
-    extracted_resume = ""
-    if uploaded_resume is not None:
-        current_sig = _upload_signature(uploaded_resume)
-        if current_sig != st.session_state.last_resume_upload_sig:
-            extracted_resume = _extract_uploaded_text(uploaded_resume)
-            if extracted_resume:
-                if st.session_state.auto_compress_resume:
-                    extracted_resume, compressed = _compress_long_text(
-                        extracted_resume, int(st.session_state.resume_target_chars)
+    extracted_contract = ""
+    if uploaded_contract is not None:
+        current_sig = _upload_signature(uploaded_contract)
+        if current_sig != st.session_state.last_contract_upload_sig:
+            extracted_contract = _extract_uploaded_text(uploaded_contract)
+            if extracted_contract:
+                if st.session_state.auto_compress_contract:
+                    extracted_contract, compressed = _compress_long_text(
+                        extracted_contract, int(st.session_state.contract_target_chars)
                     )
                     if compressed:
                         st.info("업로드 텍스트가 길어 자동 압축(앞/뒤 중심)되었습니다.")
-                st.success(f"파일 분석 완료: {uploaded_resume.name}")
-                st.session_state.resume_text_input = merge_uploaded_text(
-                    st.session_state.resume_text_input,
-                    extracted_resume,
+                st.success(f"파일 분석 완료: {uploaded_contract.name}")
+                st.session_state.contract_text_input = merge_uploaded_text(
+                    st.session_state.contract_text_input,
+                    extracted_contract,
                     st.session_state.upload_apply_mode,
                 )
-                st.session_state.last_resume_upload_sig = current_sig
+                st.session_state.last_contract_upload_sig = current_sig
     else:
-        st.session_state.last_resume_upload_sig = ""
+        st.session_state.last_contract_upload_sig = ""
 
-    if uploaded_jd is not None:
-        current_sig = _upload_signature(uploaded_jd)
-        if current_sig != st.session_state.last_jd_upload_sig:
-            extracted_jd = _extract_uploaded_text(uploaded_jd)
-            if extracted_jd:
-                if st.session_state.auto_compress_jd:
-                    extracted_jd, compressed = _compress_long_text(
-                        extracted_jd,
-                        int(st.session_state.jd_target_chars),
+    if uploaded_ref is not None:
+        current_sig = _upload_signature(uploaded_ref)
+        if current_sig != st.session_state.last_ref_upload_sig:
+            extracted_ref = _extract_uploaded_text(uploaded_ref)
+            if extracted_ref:
+                if st.session_state.auto_compress_ref:
+                    extracted_ref, compressed = _compress_long_text(
+                        extracted_ref,
+                        int(st.session_state.ref_target_chars),
                     )
                     if compressed:
-                        st.info("JD/공고 텍스트가 길어 자동 압축(앞/뒤 중심)되었습니다.")
-                st.success(f"JD 파일 분석 완료: {uploaded_jd.name}")
-                st.session_state.jd_text_input = merge_uploaded_text(
-                    st.session_state.jd_text_input,
-                    extracted_jd,
+                        st.info("참조 법령 텍스트가 길어 자동 압축(앞/뒤 중심)되었습니다.")
+                st.success(f"참조 파일 분석 완료: {uploaded_ref.name}")
+                st.session_state.reference_text_input = merge_uploaded_text(
+                    st.session_state.reference_text_input,
+                    extracted_ref,
                     st.session_state.upload_apply_mode,
                 )
-                st.session_state.last_jd_upload_sig = current_sig
+                st.session_state.last_ref_upload_sig = current_sig
     else:
-        st.session_state.last_jd_upload_sig = ""
+        st.session_state.last_ref_upload_sig = ""
 
-    max_resume_chars = int(st.session_state.max_resume_chars)
-    if len(st.session_state.resume_text_input or "") > max_resume_chars:
-        st.session_state.resume_text_input = (st.session_state.resume_text_input or "")[
-            :max_resume_chars
+    max_contract_chars = int(st.session_state.max_contract_chars)
+    if len(st.session_state.contract_text_input or "") > max_contract_chars:
+        st.session_state.contract_text_input = (st.session_state.contract_text_input or "")[
+            :max_contract_chars
         ]
         st.warning(
-            f"이력서 텍스트는 최대 {max_resume_chars:,}자까지 입력할 수 있어 자동으로 잘렸습니다."
+            f"계약서 텍스트는 최대 {max_contract_chars:,}자까지 입력할 수 있어 자동으로 잘렸습니다."
         )
 
-    resume_text = st.text_area(
-        "이력서 텍스트(선택)",
+    contract_text = st.text_area(
+        "계약서 원문(선택)",
         height=220,
         placeholder="여기에 직접 붙여넣거나, 위에서 파일 업로드를 사용하세요.",
-        key="resume_text_input",
-        max_chars=max_resume_chars,
-        help=f"최대 {max_resume_chars:,}자까지 입력할 수 있습니다. 입력 중 글자 수가 실시간 표시됩니다.",
+        key="contract_text_input",
+        max_chars=max_contract_chars,
+        help=f"최대 {max_contract_chars:,}자까지 입력할 수 있습니다. 입력 중 글자 수가 실시간 표시됩니다.",
     )
-    resume_text = st.session_state.resume_text_input
+    contract_text = st.session_state.contract_text_input
     st.caption(
-        f"이력서 텍스트는 최대 {max_resume_chars:,}자까지 입력 가능합니다. "
+        f"계약서 원문은 최대 {max_contract_chars:,}자까지 입력 가능합니다. "
         "입력창 내부 카운터가 실시간 기준입니다."
     )
-    max_jd_chars = int(st.session_state.max_jd_chars)
-    if len(st.session_state.jd_text_input or "") > max_jd_chars:
-        st.session_state.jd_text_input = (st.session_state.jd_text_input or "")[:max_jd_chars]
+    max_ref_chars = int(st.session_state.max_ref_chars)
+    if len(st.session_state.reference_text_input or "") > max_ref_chars:
+        st.session_state.reference_text_input = (st.session_state.reference_text_input or "")[:max_ref_chars]
         st.warning(
-            f"JD/공고 텍스트는 최대 {max_jd_chars:,}자까지 입력할 수 있어 자동으로 잘렸습니다."
+            f"참조 법령 텍스트는 최대 {max_ref_chars:,}자까지 입력할 수 있어 자동으로 잘렸습니다."
         )
     st.text_area(
-        "JD/공고 텍스트(선택)",
+        "참조 법령/표준 계약서 텍스트(선택)",
         height=180,
-        placeholder="채용공고/JD 텍스트를 붙여넣거나 위에서 파일 업로드를 사용하세요.",
-        key="jd_text_input",
-        max_chars=max_jd_chars,
-        help=f"최대 {max_jd_chars:,}자까지 입력할 수 있습니다. 입력 중 글자 수가 실시간 표시됩니다.",
+        placeholder="참조할 법령 조문 또는 표준 계약서 텍스트를 붙여넣거나 위에서 파일 업로드를 사용하세요.",
+        key="reference_text_input",
+        max_chars=max_ref_chars,
+        help=f"최대 {max_ref_chars:,}자까지 입력할 수 있습니다. 입력 중 글자 수가 실시간 표시됩니다.",
     )
-    jd_text = st.session_state.jd_text_input
+    reference_text = st.session_state.reference_text_input
     st.caption(
-        f"JD/공고 텍스트는 최대 {max_jd_chars:,}자까지 입력 가능합니다. "
+        f"참조 법령 텍스트는 최대 {max_ref_chars:,}자까지 입력 가능합니다. "
         "입력창 내부 카운터가 실시간 기준입니다."
     )
 
-    if not (st.session_state.resume_text_input or "").strip():
+    if not (st.session_state.contract_text_input or "").strip():
         st.info(
-            "이력서 텍스트가 비어 있습니다. 이력서 전용 요청은 실행 시 계획 중심(예: plan_only)으로 "
+            "계약서 원문이 비어 있습니다. 계약서 전용 요청은 실행 시 수정 계획 중심(advice_only)으로 "
             "자동 조정될 수 있습니다."
         )
-    if not (st.session_state.jd_text_input or "").strip():
+    if not (st.session_state.reference_text_input or "").strip():
         st.caption(
-            "JD/공고 텍스트가 없으면 공고-이력서 갭 분석의 구체성이 낮아질 수 있습니다."
+            "참조 법령/표준 계약서 텍스트가 없으면 갭 분석의 구체성이 낮아질 수 있습니다."
         )
 
     if st.button(
@@ -547,29 +547,29 @@ def run() -> None:
         use_container_width=True,
     ):
         query = st.session_state.query_input
-        target_role = st.session_state.target_role_input
-        resume_text_for_run = resume_text
-        jd_text_for_run = jd_text
+        document_type = st.session_state.document_type_input
+        contract_text_for_run = contract_text
+        reference_text_for_run = reference_text
         if not query.strip():
             st.warning("질문/요청을 입력해 주세요.")
             return
         if len(query) > MAX_QUERY_CHARS:
             st.warning(f"질문/요청은 최대 {MAX_QUERY_CHARS:,}자까지 입력할 수 있습니다.")
             return
-        if len(resume_text_for_run) > max_resume_chars:
-            if st.session_state.auto_compress_resume:
-                resume_text_for_run, compressed = _compress_long_text(
-                    resume_text_for_run, int(st.session_state.resume_target_chars)
+        if len(contract_text_for_run) > max_contract_chars:
+            if st.session_state.auto_compress_contract:
+                contract_text_for_run, compressed = _compress_long_text(
+                    contract_text_for_run, int(st.session_state.contract_target_chars)
                 )
                 if compressed:
-                    st.session_state.resume_text_input = resume_text_for_run
-                    st.info("실행 전 긴 이력서 텍스트를 자동 압축했습니다.")
-            if len(resume_text_for_run) > max_resume_chars:
+                    st.session_state.contract_text_input = contract_text_for_run
+                    st.info("실행 전 긴 계약서 텍스트를 자동 압축했습니다.")
+            if len(contract_text_for_run) > max_contract_chars:
                 st.error(
-                    f"이력서 텍스트 길이({len(resume_text_for_run):,}자)가 제한"
-                    f"({max_resume_chars:,}자)을 초과했습니다."
+                    f"계약서 텍스트 길이({len(contract_text_for_run):,}자)가 제한"
+                    f"({max_contract_chars:,}자)을 초과했습니다."
                 )
-                st.info("텍스트를 줄이거나 '긴 이력서 자동 압축' 옵션을 켜고 다시 시도하세요.")
+                st.info("텍스트를 줄이거나 '긴 계약서 자동 압축' 옵션을 켜고 다시 시도하세요.")
                 return
 
         try:
@@ -579,12 +579,12 @@ def run() -> None:
                     ChatRequest(
                         session_id=st.session_state.session_id,
                         user_query=query,
-                        target_role=target_role,
-                        resume_text=resume_text_for_run,
-                        jd_text=jd_text_for_run,
+                        document_type=document_type,
+                        contract_text=contract_text_for_run,
+                        reference_text=reference_text_for_run,
                     )
                 )
-        except JobPilotError as exc:
+        except LegalPilotError as exc:
             _show_error_by_code(exc.error_code, exc.detail)
             return
         except Exception as exc:
@@ -599,9 +599,9 @@ def run() -> None:
         record = build_history_record(
             session_id=st.session_state.session_id,
             query=query,
-            target_role=target_role,
-            resume_text=resume_text_for_run,
-            jd_text=jd_text_for_run,
+            document_type=document_type,
+            contract_text=contract_text_for_run,
+            reference_text=reference_text_for_run,
             response_payload=response_payload,
             run_id=run_id,
             storage_mode=st.session_state.history_storage_mode,
@@ -632,23 +632,23 @@ def run() -> None:
 
         col1, col2 = st.columns(2)
         with col1:
-            resume_items = latest.get("resume_improvements", []) or []
-            if resume_items:
-                st.subheader("이력서 개선")
-                for item in resume_items:
+            clause_items = latest.get("clause_analysis", []) or []
+            if clause_items:
+                st.subheader("조항 분석")
+                for item in clause_items:
                     st.markdown(f"- {item}")
         with col2:
-            interview_items = latest.get("interview_preparation", []) or []
-            if interview_items:
-                st.subheader("면접 준비")
-                for item in interview_items:
+            risk_items = latest.get("risk_findings", []) or []
+            if risk_items:
+                st.subheader("위험 조항 탐지")
+                for item in risk_items:
                     st.markdown(f"- {item}")
-            elif route in {"resume_only", "plan_only"}:
-                st.caption("요청 라우트에 따라 면접 준비 섹션은 생략되었습니다.")
+            elif route in {"clause_only", "advice_only"}:
+                st.caption("요청 라우트에 따라 위험 조항 탐지 섹션은 생략되었습니다.")
 
-        plan_items = latest.get("two_week_plan", []) or []
+        plan_items = latest.get("revision_plan", []) or []
         if plan_items:
-            st.subheader("2주 실행 계획")
+            st.subheader("수정 계획")
             for item in plan_items:
                 st.markdown(f"- {item}")
             gap_notice = str(latest.get("input_gap_notice", "") or "").strip()
@@ -656,11 +656,11 @@ def run() -> None:
                 gap_notice = ""
             if gap_notice:
                 st.info(gap_notice)
-        elif route in {"resume_only", "interview_only"}:
-            st.caption("요청 라우트에 따라 2주 실행 계획 섹션은 생략되었습니다.")
+        elif route in {"clause_only", "risk_only"}:
+            st.caption("요청 라우트에 따라 수정 계획 섹션은 생략되었습니다.")
 
-        if (not (latest.get("resume_improvements", []) or [])) and route in {"interview_only", "plan_only"}:
-            st.caption("요청 라우트에 따라 이력서 개선 섹션은 생략되었습니다.")
+        if (not (latest.get("clause_analysis", []) or [])) and route in {"risk_only", "advice_only"}:
+            st.caption("요청 라우트에 따라 조항 분석 섹션은 생략되었습니다.")
 
         references = latest.get("references", []) or []
         if references:
@@ -704,7 +704,7 @@ def run() -> None:
                 node_status = latest.get("node_status")
                 if isinstance(node_status, dict):
                     st.markdown("- node_status:")
-                    for node_name in ("supervisor", "rag", "resume", "interview", "plan", "synthesis"):
+                    for node_name in ("supervisor", "rag", "clause", "risk", "advice", "synthesis"):
                         item = node_status.get(node_name)
                         if not isinstance(item, dict):
                             continue

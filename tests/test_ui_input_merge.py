@@ -2,13 +2,13 @@ from src.ui.input_merge import merge_uploaded_text
 
 
 def test_merge_uploaded_text_overwrite_mode_replaces_existing() -> None:
-    merged = merge_uploaded_text("기존 이력서", "업로드 이력서", "덮어쓰기")
-    assert merged == "업로드 이력서"
+    merged = merge_uploaded_text("기존 계약서 내용", "업로드 계약서 내용", "덮어쓰기")
+    assert merged == "업로드 계약서 내용"
 
 
 def test_merge_uploaded_text_append_mode_combines_with_separator() -> None:
-    merged = merge_uploaded_text("기존 이력서", "업로드 이력서", "추가하기")
-    assert merged == "기존 이력서\n\n업로드 이력서"
+    merged = merge_uploaded_text("기존 계약서 내용", "업로드 계약서 내용", "추가하기")
+    assert merged == "기존 계약서 내용\n\n업로드 계약서 내용"
 
 
 def test_merge_uploaded_text_append_mode_avoids_dup_when_same_text() -> None:
@@ -21,4 +21,3 @@ def test_merge_uploaded_text_append_mode_avoids_dup_when_same_text() -> None:
 def test_merge_uploaded_text_with_empty_upload_keeps_existing() -> None:
     merged = merge_uploaded_text("기존 텍스트", "   ", "추가하기")
     assert merged == "기존 텍스트"
-

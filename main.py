@@ -1,4 +1,4 @@
-"""CLI entry point for JobPilot AI."""
+"""CLI entry point for LegalPilot AI."""
 
 from __future__ import annotations
 
@@ -6,20 +6,20 @@ import argparse
 import json
 import sys
 
-from src.common import JobPilotError
-from src.workflow import ChatRequest, JobPilotService
+from src.common import LegalPilotError
+from src.workflow import ChatRequest, LegalPilotService
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run JobPilot AI from CLI")
+    parser = argparse.ArgumentParser(description="Run LegalPilot AI from CLI")
     parser.add_argument("--session-id", default="cli-default")
-    parser.add_argument("--target-role", default="백엔드 개발자")
+    parser.add_argument("--document-type", default="근로계약서")
     parser.add_argument("--query", required=True, help="User request/question")
-    parser.add_argument("--resume-text", default="", help="Optional resume plain text")
+    parser.add_argument("--contract-text", default="", help="Optional contract plain text")
     parser.add_argument(
-        "--jd-text",
+        "--reference-text",
         default="",
-        help="Optional job posting/JD plain text for gap analysis",
+        help="Optional reference law/standard contract plain text for gap analysis",
     )
     return parser.parse_args()
 
@@ -27,18 +27,18 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     try:
         args = parse_args()
-        service = JobPilotService()
+        service = LegalPilotService()
         response = service.run(
             ChatRequest(
                 session_id=args.session_id,
                 user_query=args.query,
-                target_role=args.target_role,
-                resume_text=args.resume_text,
-                jd_text=args.jd_text,
+                document_type=args.document_type,
+                contract_text=args.contract_text,
+                reference_text=args.reference_text,
             )
         )
         print(json.dumps(response.model_dump(), ensure_ascii=False, indent=2))
-    except JobPilotError as exc:
+    except LegalPilotError as exc:
         print(json.dumps(exc.to_payload(), ensure_ascii=False, indent=2))
         sys.exit(1)
 

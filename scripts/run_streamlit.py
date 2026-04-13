@@ -1,4 +1,4 @@
-"""Run Streamlit app for JobPilot."""
+"""Run Streamlit app for LegalPilot."""
 
 from __future__ import annotations
 

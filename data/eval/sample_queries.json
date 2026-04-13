@@ -1,178 +1,177 @@
 [
   {
-    "query": "이력서 개선 포인트 5개만 뽑아줘. 면접은 제외해줘.",
-    "target_role": "백엔드 개발자",
-    "resume_text": "FastAPI 기반 API 개발 2년, MySQL 운영 경험, AWS 배포 경험",
-    "jd_text": "백엔드 개발자 채용: Python, FastAPI, 성능 최적화, 장애 대응, 협업 능력",
-    "expected_route": "resume_only"
+    "query": "조항 분석 포인트 5개만 뽑아줘. 위험 진단은 제외해줘.",
+    "document_type": "근로계약서",
+    "contract_text": "월 급여 300만 원, 포괄임금제 적용, 연장근로 포함, 경업금지 3년",
+    "reference_text": "근로기준법 제17조: 임금 구성항목·계산방법·지급방법을 서면 명시.",
+    "expected_route": "clause_only"
   },
   {
-    "query": "면접 질문과 답변 방향만 준비해줘.",
-    "target_role": "데이터 분석가",
-    "resume_text": "",
-    "jd_text": "데이터 분석가 채용: SQL, Python, 지표 설계, 대시보드 운영",
-    "expected_route": "interview_only"
+    "query": "위험 조항과 법적 우려 사항만 알려줘.",
+    "document_type": "임대차계약서",
+    "contract_text": "보증금 1억, 월세 80만 원, 임대 기간 1년, 중도 해지 시 보증금 20% 위약금",
+    "reference_text": "주택임대차보호법 제6조: 계약 갱신 요구권. 제7조의2: 차임 증감 청구권.",
+    "expected_route": "risk_only"
   },
   {
-    "query": "이력서와 면접을 같이 준비할 수 있게 2주 계획까지 만들어줘.",
-    "target_role": "PM",
-    "resume_text": "신규 기능 런칭, KPI 모니터링, 유관부서 협업 경험",
-    "jd_text": "PM 채용: 우선순위 결정, 실험 설계, 이해관계자 조율, 로드맵 관리",
-    "expected_route": "full"
+    "query": "조항 분석과 위험 진단, 수정 계획까지 모두 검토해줘.",
+    "document_type": "근로계약서",
+    "contract_text": "월 급여 280만 원(포괄임금제), 수습 기간 6개월, 경업금지 2년, 비밀유지 5년",
+    "reference_text": "근로기준법 제17조 및 제53조: 임금 명시 의무, 연장근로 한도.",
+    "expected_route": "full_review"
   },
   {
-    "query": "전체 요약 없이 2주 실행계획만 간단히 작성해줘.",
-    "target_role": "백엔드 개발자",
-    "resume_text": "",
-    "jd_text": "백엔드 개발자 채용: Python, FastAPI, DB 튜닝, 장애 대응",
-    "expected_route": "plan_only"
+    "query": "수정 계획만 간단히 작성해줘.",
+    "document_type": "NDA",
+    "contract_text": "비밀유지 기간 10년, 위반 시 손해배상 5000만 원, 기밀 범위 미정의",
+    "reference_text": "",
+    "expected_route": "advice_only"
   },
   {
-    "query": "면접도 조금 보고 싶고 이력서도 손보고 싶은데, 계획은 너무 길지 않게 정리해줘.",
-    "target_role": "백엔드 개발자",
-    "resume_text": "FastAPI API 운영, 장애 대응 경험, MySQL 기본 튜닝 경험",
-    "jd_text": "백엔드 개발자 채용: Python, FastAPI, DB 성능 개선, 모니터링, 협업",
+    "query": "위험도 보고 싶고 조항도 검토하고 싶은데, 수정 계획은 길지 않게 정리해줘.",
+    "document_type": "용역계약서",
+    "contract_text": "용역 기간 1년, 대금 500만 원, 하자 담보 책임 1년, 지체상금 일 0.1%",
+    "reference_text": "민법 제664조: 도급인의 하자 보수 청구권.",
     "expected_route": ""
   },
   {
-    "query": "계획은 간단히만 보고 싶고, 이력서/면접은 핵심만 2~3개씩 알려줘.",
-    "target_role": "PM",
-    "resume_text": "신규 기능 릴리즈, 실험 결과 분석, 팀 간 커뮤니케이션 경험",
-    "jd_text": "PM 채용: 로드맵, 우선순위 결정, KPI, 이해관계자 조율",
+    "query": "수정 방향과 핵심 조항을 2~3개씩 요약해줘.",
+    "document_type": "근로계약서",
+    "contract_text": "연봉 3600만 원, 주 52시간 준수, 퇴직금 법정 기준 적용",
+    "reference_text": "근로기준법 제55조: 주휴일 부여 의무.",
     "expected_route": ""
   },
   {
-    "query": "이력서는 제외하고 면접 질문/답변 방향만 준비해줘. 2주 계획도 제외.",
-    "target_role": "데이터 분석가",
-    "resume_text": "",
-    "jd_text": "데이터 분석가 채용: SQL, Python, 실험 설계, 대시보드",
-    "expected_route": "interview_only"
+    "query": "위험 조항은 제외하고 조항 분석과 수정 방향만 보여줘.",
+    "document_type": "임대차계약서",
+    "contract_text": "보증금 5000만 원, 전세 기간 2년, 계약갱신 미기재",
+    "reference_text": "주택임대차보호법 제6조의3: 계약갱신 요구권 행사 기간.",
+    "expected_route": "clause_only"
   },
   {
-    "query": "면접은 제외하고 JD 대비 이력서 갭만 집중해서 정리해줘. 계획은 빼줘.",
-    "target_role": "백엔드 개발자",
-    "resume_text": "Python/FastAPI 서비스 개발, Docker 배포 경험",
-    "jd_text": "백엔드 개발자 채용: Python, FastAPI, 장애 대응, DB 튜닝, AWS",
-    "expected_route": "resume_only"
+    "query": "조항 분석 제외하고 위험 조항과 법적 리스크만 집중 검토해줘.",
+    "document_type": "NDA",
+    "contract_text": "비밀유지 기간 무기한, 위반 시 손해배상 1억, 제3자 공개 금지",
+    "reference_text": "부정경쟁방지법 제2조: 영업비밀 정의.",
+    "expected_route": "risk_only"
   },
   {
-    "query": "전체 요약 없이 2주 계획만 다시 작성해줘.",
-    "target_role": "PM",
-    "resume_text": "",
-    "jd_text": "PM 채용: 우선순위, KPI 설계, 조직 커뮤니케이션",
-    "expected_route": "plan_only"
+    "query": "수정 계획만 우선 받고 싶어. 전체 요약은 짧게.",
+    "document_type": "용역계약서",
+    "contract_text": "용역 단가 월 200만 원, 계약 해지 사전 통보 30일, 지식재산권 귀속 불명확",
+    "reference_text": "",
+    "expected_route": "advice_only"
   },
   {
-    "query": "이력서만 빠르게 고쳐줘. 면접이랑 계획은 제외해.",
-    "target_role": "데이터 분석가",
-    "resume_text": "SQL 리포트 작성, 파이썬 분석 자동화 경험",
-    "jd_text": "데이터 분석가 채용: SQL, Python, 지표 설계, 실험 분석",
-    "expected_route": "resume_only"
+    "query": "조항 분석만 빠르게 해줘. 위험이랑 수정 계획은 제외해.",
+    "document_type": "근로계약서",
+    "contract_text": "주 40시간 근무, 초과 근무 별도 합의, 퇴직금 미기재",
+    "reference_text": "근로기준법 제34조: 퇴직급여 지급 의무.",
+    "expected_route": "clause_only"
   },
   {
-    "query": "면접 준비만 하고 싶어. 이력서/2주 계획은 빼줘.",
-    "target_role": "PM",
-    "resume_text": "",
-    "jd_text": "PM 채용: 우선순위, KPI, 협업 커뮤니케이션, 리스크 관리",
-    "expected_route": "interview_only"
+    "query": "위험 진단 준비만 하고 싶어. 조항 분석/수정 계획은 빼줘.",
+    "document_type": "임대차계약서",
+    "contract_text": "보증금 2억, 월세 0원, 전세권 미등기, 임대인 동의 없는 전대 금지",
+    "reference_text": "주택임대차보호법 제3조: 대항력 요건.",
+    "expected_route": "risk_only"
   },
   {
-    "query": "2주 실행 계획만 우선 받고 싶어. 전체 요약은 짧게.",
-    "target_role": "데이터 분석가",
-    "resume_text": "",
-    "jd_text": "데이터 분석가 채용: SQL, 대시보드, 실험 설계, 비즈니스 커뮤니케이션",
-    "expected_route": "plan_only"
+    "query": "수정 실행 계획만 우선 작성해줘.",
+    "document_type": "근로계약서",
+    "contract_text": "연봉 4200만 원, 성과급 별도, 계약 기간 1년(갱신 여부 미정)",
+    "reference_text": "",
+    "expected_route": "advice_only"
   },
   {
-    "query": "이력서랑 면접 모두 준비해줘. 계획은 포함해도 되고 안 해도 돼.",
-    "target_role": "백엔드 개발자",
-    "resume_text": "FastAPI 운영, 장애 대응, Docker 배포 경험",
-    "jd_text": "백엔드 채용: Python, API 성능 개선, DB 튜닝, 모니터링",
+    "query": "계약서 전반을 도와줘.",
+    "document_type": "NDA",
+    "contract_text": "비밀유지 기간 3년, 위반 시 계약 해지, 기밀 범위: 기술·영업·인사",
+    "reference_text": "부정경쟁방지법 제10조: 영업비밀 침해 금지.",
     "expected_route": ""
   },
   {
-    "query": "무엇부터 해야 할지 모르겠어. 지금 상태에서 가장 급한 것만 정리해줘.",
-    "target_role": "PM",
-    "resume_text": "신규 기능 기획, 데이터 확인, 협업 경험",
-    "jd_text": "PM 채용: 우선순위 결정, KPI 관리, 이해관계자 조율",
+    "query": "무엇부터 해야 할지 모르겠어. 지금 계약에서 가장 급한 것만 정리해줘.",
+    "document_type": "용역계약서",
+    "contract_text": "용역 기간 6개월, 대금 1200만 원, 중도 해지 조항 없음",
+    "reference_text": "민법 제673조: 도급인의 임의 해제권.",
     "expected_route": ""
   },
   {
-    "query": "내 이력서와 JD 기준으로 부족 역량과 면접 대비를 같이 보고 싶어.",
-    "target_role": "데이터 분석가",
-    "resume_text": "Python 분석, 기본 SQL, 대시보드 구축 경험",
-    "jd_text": "데이터 분석가 채용: 고급 SQL, 실험 설계, 통계, 커뮤니케이션",
-    "expected_route": "full"
+    "query": "조항 분석과 위험 리스크를 같이 검토하고 싶어.",
+    "document_type": "근로계약서",
+    "contract_text": "수습 기간 3개월(최저임금 80% 지급), 수습 해고 예고 없음",
+    "reference_text": "근로기준법 제35조: 수습 근로자 해고 예고 예외 요건.",
+    "expected_route": "full_review"
   },
   {
-    "query": "면접 제외하고 실무 액션 위주로만 정리해줘.",
-    "target_role": "백엔드 개발자",
-    "resume_text": "Python API 개발, AWS 배포, 기본 모니터링 경험",
-    "jd_text": "백엔드 채용: Python, DB 성능 최적화, 장애 대응, 협업",
-    "expected_route": "resume_only"
+    "query": "위험 조항 제외하고 수정 방향 위주로만 정리해줘.",
+    "document_type": "임대차계약서",
+    "contract_text": "보증금 반환 기한 미기재, 계약 종료 후 1개월 내 반환 관행만 언급",
+    "reference_text": "주택임대차보호법 제4조: 임대차 기간 보장.",
+    "expected_route": "clause_only"
   },
   {
-    "query": "이력서와 계획은 제외하고 면접 질문/답변만 핵심 5개 줘.",
-    "target_role": "데이터 분석가",
-    "resume_text": "",
-    "jd_text": "데이터 분석가 채용: SQL, Python, 실험, 지표 해석",
-    "expected_route": "interview_only"
+    "query": "조항 분석과 수정 계획은 제외하고 위험 조항/법적 우려만 핵심 5개 줘.",
+    "document_type": "NDA",
+    "contract_text": "비밀유지 위반 시 즉시 해지, 손해배상 상한 없음, 준거법 미기재",
+    "reference_text": "부정경쟁방지법 제14조의2: 손해배상 특례.",
+    "expected_route": "risk_only"
   },
   {
-    "query": "이직 준비 도와줘.",
-    "target_role": "백엔드 개발자",
-    "resume_text": "Python API 개발 경험 2년",
-    "jd_text": "백엔드 채용: API 성능, DB 최적화, 장애 대응",
+    "query": "전반적인 법률 검토 부탁해.",
+    "document_type": "근로계약서",
+    "contract_text": "연봉 3000만 원, 포괄임금제, 주 52시간 초과 가능, 경업금지 1년",
+    "reference_text": "근로기준법 제17조·제53조.",
     "expected_route": ""
   },
   {
-    "query": "면접은 제외하고 계획만 작성해줘.",
-    "target_role": "PM",
-    "resume_text": "",
-    "jd_text": "PM 채용: 우선순위, KPI, 커뮤니케이션",
-    "expected_route": "plan_only"
+    "query": "위험 조항 제외 + 수정 계획만. 조항 분석은 보지 말아줘.",
+    "document_type": "용역계약서",
+    "contract_text": "단가 월 150만 원, 지체상금 일 0.05%, 지식재산권 도급인 귀속",
+    "reference_text": "",
+    "expected_route": "advice_only"
   },
   {
-    "query": "면접 제외 + 계획만. 이력서는 보지 말아줘.",
-    "target_role": "데이터 분석가",
-    "resume_text": "SQL 기반 리포팅 경험",
-    "jd_text": "데이터 분석가 채용: SQL, 실험 설계, 대시보드",
-    "expected_route": "plan_only"
+    "query": "조항 분석이랑 수정 계획은 빼고 위험 진단만 해줘.",
+    "document_type": "임대차계약서",
+    "contract_text": "전세금 3억, 전세권 미설정, 근저당 채권최고액 2억 5000만 원 설정 중",
+    "reference_text": "주택임대차보호법 제3조의2: 우선변제권.",
+    "expected_route": "risk_only"
   },
   {
-    "query": "이력서랑 계획은 빼고 면접 준비만 해줘. 핵심 질문 5개.",
-    "target_role": "백엔드 개발자",
-    "resume_text": "",
-    "jd_text": "백엔드 채용: Python, FastAPI, 장애 대응",
-    "expected_route": "interview_only"
+    "query": "위험만 제외하고 나머지(조항+수정계획)는 진행해줘.",
+    "document_type": "근로계약서",
+    "contract_text": "성과급 지급 기준 미정, 계약 기간 1년, 갱신 협의 조항 없음",
+    "reference_text": "근로기준법 제17조.",
+    "expected_route": "clause_only"
   },
   {
-    "query": "면접만 제외하고 나머지(이력서+계획)는 진행해줘.",
-    "target_role": "백엔드 개발자",
-    "resume_text": "FastAPI 운영, AWS 배포 경험",
-    "jd_text": "백엔드 채용: Python, DB 튜닝, 장애 대응",
-    "expected_route": "resume_only"
+    "query": "조항 분석과 위험 진단, 수정 계획까지 통합 검토해줘.",
+    "document_type": "임대차계약서",
+    "contract_text": "보증금 1억 5000만 원, 월세 50만 원, 계약갱신 요구권 행사 기간 미기재, 특약 없음",
+    "reference_text": "주택임대차보호법 제6조·제6조의3.",
+    "expected_route": "full_review"
   },
   {
-    "query": "JD 대비 이력서 개선과 면접 준비를 같이 하고, 2주 실행계획까지 만들어줘.",
-    "target_role": "데이터 분석가",
-    "resume_text": "SQL 리포트 자동화, 파이썬 데이터 전처리, 간단한 대시보드 제작 경험",
-    "jd_text": "데이터 분석가 채용: SQL 최적화, 실험 설계, 지표 정의, 이해관계자 커뮤니케이션",
-    "expected_route": "full"
+    "query": "JD 대비 계약 문제와 개선점, 수정 계획까지 한 번에 정리해줘.",
+    "document_type": "NDA",
+    "contract_text": "비밀유지 기간 5년, 기밀 범위: 영업·기술·재무, 위반 시 손해배상 3000만 원",
+    "reference_text": "부정경쟁방지법 제2조·제10조.",
+    "expected_route": "full_review"
   },
   {
-    "query": "이직 준비를 전체로 도와줘. 이력서/면접/실행계획을 한 번에 정리해줘.",
-    "target_role": "PM",
-    "resume_text": "신규 기능 우선순위 조정, KPI 대시보드 관리, 협업 일정 조율 경험",
-    "jd_text": "PM 채용: 제품 전략, 로드맵 수립, 실험 설계, 리스크 관리, 커뮤니케이션",
-    "expected_route": "full"
+    "query": "수정 계획만 우선 받고 싶어. 전체 요약은 짧게.",
+    "document_type": "용역계약서",
+    "contract_text": "대금 지급 시기 불명확, 계약 해지 사전 통보 없음, 하자 담보 미기재",
+    "reference_text": "",
+    "expected_route": "advice_only"
   },
   {
-    "query": "공고와 이력서를 비교해서 개선점, 면접 대비, 2주 플랜까지 통합 코칭해줘.",
-    "target_role": "백엔드 개발자",
-    "resume_text": "Python/FastAPI API 개발, 로그 모니터링, Docker 배포, 기본 장애 대응 경험",
-    "jd_text": "백엔드 채용: Python, API 성능 최적화, DB 튜닝, 장애 대응, 협업",
-    "expected_route": "full"
+    "query": "공고 조항과 법령 기준으로 문제점, 위험 진단, 수정 계획까지 통합 검토해줘.",
+    "document_type": "근로계약서",
+    "contract_text": "연봉 3600만 원, 포괄임금제, 수습 3개월(80% 지급), 경업금지 2년",
+    "reference_text": "근로기준법 제17조·제34조·제35조·제53조.",
+    "expected_route": "full_review"
   }
 ]
-

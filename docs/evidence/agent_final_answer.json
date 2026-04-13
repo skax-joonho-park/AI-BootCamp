@@ -1,26 +1,7 @@
 {
-  "summary": "백엔드 개발자로의 이직 준비를 위해 이력서 개선과 면접 준비가 필요합니다.",
-  "resume_improvements": [
-    "API 성능 최적화 경험 추가: 응답 시간 개선, 처리량 증가 등의 정량적 성과 포함.",
-    "장애 대응 및 클라우드 운영 경험 명시: 장애 원인 분석 및 재발 방지 조치 사례 작성.",
-    "프로젝트 설명 구조화: 문제-접근-결과(STAR 방식)로 작성하고, 협업 과정에서 본인의 기여도 강조.",
-    "기술 스택 확장: 데이터베이스 튜닝, 캐싱, 컨테이너화(Docker/Kubernetes) 경험 추가."
-  ],
-  "interview_preparation": [
-    "대규모 트래픽 상황에서 API 성능을 개선한 경험 설명 준비.",
-    "트랜잭션 격리 수준과 데드락 해결 경험에 대한 답변 준비.",
-    "장애 대응 프로세스를 본인이 주도한 사례 준비.",
-    "문제 해결 접근 방식과 성과를 정량적으로 표현하는 연습."
-  ],
-  "two_week_plan": [
-    "이력서 업데이트: 개선 포인트를 반영하여 최신화.",
-    "기술 스택 학습: 데이터베이스 튜닝 및 Docker/Kubernetes 활용.",
-    "모의 면접 진행: 예상 질문에 대한 답변 연습.",
-    "관련 직무 공고 분석: 요구 사항과 키워드 파악."
-  ],
-  "references": [
-    "job_market_guide.md",
-    "interview_strategy.md",
-    "resume_writing_tips.md"
-  ]
+  "summary": "",
+  "clause_analysis": [],
+  "risk_findings": [],
+  "revision_plan": [],
+  "references": []
 }

@@ -50,14 +50,14 @@ def _infer_root_category_from_filename(path: Path) -> str:
     filename = path.name.lower()
     text = f"{stem} {filename}"
 
-    if any(token in text for token in ("job_posting", "posting", "공고", "채용", "job_market")):
-        return "job_postings"
-    if any(token in text for token in ("jd", "job_description", "직무기술", "job_desc")):
-        return "jd"
-    if any(token in text for token in ("interview", "면접")):
-        return "interview_guides"
-    if any(token in text for token in ("portfolio", "포트폴리오", "resume", "이력서")):
-        return "portfolio_examples"
+    if any(token in text for token in ("statute", "법령", "법률", "시행령", "규정", "조례")):
+        return "statutes"
+    if any(token in text for token in ("standard", "표준계약", "표준_계약", "model_contract", "표준")):
+        return "standard_contracts"
+    if any(token in text for token in ("case", "판례", "사례", "가이드", "guide", "해설")):
+        return "case_guides"
+    if any(token in text for token in ("example", "예시", "sample", "계약서_예시", "contract_example")):
+        return "contract_examples"
     return "uncategorized"
 
 

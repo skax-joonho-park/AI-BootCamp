@@ -20,24 +20,24 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.workflow import JobPilotService
+from src.workflow import LegalPilotService
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate submission evidence artifacts")
     parser.add_argument(
         "--query",
-        default="백엔드 이직 준비를 위한 이력서 개선 포인트와 2주 계획을 제시해줘.",
+        default="근로계약서의 포괄임금제 조항이 적법한지 검토하고 위험 요소와 수정 방향을 알려줘.",
         help="User query to run for evidence generation",
     )
-    parser.add_argument("--target-role", default="백엔드 개발자")
+    parser.add_argument("--document-type", default="근로계약서")
     parser.add_argument(
-        "--resume-text",
-        default="Python/FastAPI 기반 API 개발 경험 2년, 프로젝트 협업 경험 보유",
+        "--contract-text",
+        default="월 급여 300만 원(연장·야간·휴일 근로수당 포함), 포괄임금제 적용, 경업금지 3년",
     )
     parser.add_argument(
-        "--jd-text",
-        default="백엔드 개발자 채용: Python/FastAPI, RDBMS 튜닝, 장애 대응 경험, 협업 커뮤니케이션",
+        "--reference-text",
+        default="근로기준법 제17조: 임금 구성항목·계산방법·지급방법을 서면 명시. 제53조: 연장근로 1주 12시간 한도.",
     )
     parser.add_argument(
         "--output-dir",
@@ -54,13 +54,13 @@ def main() -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    service = JobPilotService()
+    service = LegalPilotService()
     state = {
         "session_id": args.session_id,
         "user_query": args.query,
-        "target_role": args.target_role,
-        "resume_text": args.resume_text,
-        "jd_text": args.jd_text,
+        "document_type": args.document_type,
+        "contract_text": args.contract_text,
+        "reference_text": args.reference_text,
     }
     result = service.graph.invoke(
         state,
@@ -93,12 +93,12 @@ def main() -> None:
 
 - Generated at: {timestamp}
 - Session ID: {args.session_id}
-- Target role: {args.target_role}
+- Document type: {args.document_type}
 
 ## Input
 - Query: {args.query}
-- Resume text length: {len(args.resume_text)}
-- JD text length: {len(args.jd_text)}
+- Contract text length: {len(args.contract_text)}
+- Reference text length: {len(args.reference_text)}
 
 ## Supervisor Routing
 - Route: {route}
@@ -123,4 +123,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -13,8 +13,8 @@ def test_extract_sections_from_path_markdown(tmp_path: Path) -> None:
 
 
 def test_extract_text_from_upload_txt() -> None:
-    text = "이력서 핵심 내용"
-    extracted = extract_text_from_upload("resume.txt", text.encode("utf-8"))
+    text = "계약서 핵심 조항"
+    extracted = extract_text_from_upload("contract.txt", text.encode("utf-8"))
     assert extracted == text
 
 

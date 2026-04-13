@@ -1,6 +1,6 @@
 """Workflow package exports."""
 
 from src.workflow.contracts import ChatRequest, ChatResponse
-from src.workflow.engine import JobPilotService
+from src.workflow.engine import LegalPilotService
 
-__all__ = ["ChatRequest", "ChatResponse", "JobPilotService"]
+__all__ = ["ChatRequest", "ChatResponse", "LegalPilotService"]

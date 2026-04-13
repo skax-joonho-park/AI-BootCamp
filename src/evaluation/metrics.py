@@ -14,7 +14,7 @@ class RoutingSampleResult:
 @dataclass(frozen=True)
 class AnswerQualitySample:
     references: list[object]
-    two_week_plan: list[str]
+    revision_plan: list[str]
 
 
 def routing_accuracy(samples: list[RoutingSampleResult]) -> float:
@@ -38,10 +38,10 @@ def reference_inclusion_rate(samples: list[AnswerQualitySample], min_references:
 
 
 def plan_quality_rate(samples: list[AnswerQualitySample], min_plan_items: int = 4) -> float:
-    """Return ratio of answers that include enough actionable plan items."""
+    """Return ratio of answers that include enough actionable revision plan items."""
     if not samples:
         return 0.0
-    qualified = sum(1 for item in samples if len(item.two_week_plan) >= min_plan_items)
+    qualified = sum(1 for item in samples if len(item.revision_plan) >= min_plan_items)
     return qualified / len(samples)
 
 
@@ -70,4 +70,3 @@ def reference_source_duplication_rate(samples: list[AnswerQualitySample]) -> flo
         duplicate_ratio = max(0.0, min(1.0, 1.0 - (unique_count / total_count)))
         per_sample.append(duplicate_ratio)
     return sum(per_sample) / len(per_sample)
-

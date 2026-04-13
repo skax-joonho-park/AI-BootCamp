@@ -1,7 +1,7 @@
 from src.retrieval import SearchHit, rerank_hits
 
 
-def test_rerank_prioritizes_uploaded_jd_when_enabled() -> None:
+def test_rerank_prioritizes_uploaded_reference_when_enabled() -> None:
     hits = [
         SearchHit(
             content="일반 지식 문서 내용",
@@ -10,22 +10,22 @@ def test_rerank_prioritizes_uploaded_jd_when_enabled() -> None:
             metadata={"category": "uncategorized"},
         ),
         SearchHit(
-            content="백엔드 API 성능 개선과 트랜잭션 최적화 역량이 필요합니다.",
-            source="uploaded_jd_text",
+            content="근로기준법 제17조: 임금 구성항목·계산방법·지급방법을 서면 명시해야 합니다.",
+            source="uploaded_reference_text",
             score=0.50,
-            metadata={"category": "jd", "source_type": "jd_upload"},
+            metadata={"category": "statutes", "source_type": "reference_upload"},
         ),
     ]
     ranked = rerank_hits(
         hits=hits,
-        query="백엔드 API 성능 개선",
-        role_hint="backend, api, server, database",
-        route_categories={"jd", "job_postings"},
+        query="근로기준법 임금 명시",
+        role_hint="근로계약서, 임금, 근로기준법",
+        route_categories={"statutes", "standard_contracts"},
         top_k=2,
         provider="heuristic",
         enabled=True,
     )
-    assert ranked[0].source == "uploaded_jd_text"
+    assert ranked[0].source == "uploaded_reference_text"
 
 
 def test_rerank_disabled_keeps_base_score_priority() -> None:
@@ -37,17 +37,17 @@ def test_rerank_disabled_keeps_base_score_priority() -> None:
             metadata={"category": "uncategorized"},
         ),
         SearchHit(
-            content="백엔드 API 성능 개선과 트랜잭션 최적화 역량이 필요합니다.",
-            source="uploaded_jd_text",
+            content="근로기준법 제17조: 임금 구성항목·계산방법·지급방법을 서면 명시해야 합니다.",
+            source="uploaded_reference_text",
             score=0.50,
-            metadata={"category": "jd", "source_type": "jd_upload"},
+            metadata={"category": "statutes", "source_type": "reference_upload"},
         ),
     ]
     ranked = rerank_hits(
         hits=hits,
-        query="백엔드 API 성능 개선",
-        role_hint="backend, api, server, database",
-        route_categories={"jd", "job_postings"},
+        query="근로기준법 임금 명시",
+        role_hint="근로계약서, 임금, 근로기준법",
+        route_categories={"statutes", "standard_contracts"},
         top_k=2,
         provider="heuristic",
         enabled=False,
@@ -57,16 +57,16 @@ def test_rerank_disabled_keeps_base_score_priority() -> None:
 
 def test_rerank_limits_same_source_by_max_per_source() -> None:
     hits = [
-        SearchHit(content="문서A-1", source="same.md", score=0.9, metadata={"category": "jd"}),
-        SearchHit(content="문서A-2", source="same.md", score=0.88, metadata={"category": "jd"}),
-        SearchHit(content="문서A-3", source="same.md", score=0.87, metadata={"category": "jd"}),
-        SearchHit(content="문서B-1", source="other.md", score=0.7, metadata={"category": "jd"}),
+        SearchHit(content="문서A-1", source="same.md", score=0.9, metadata={"category": "statutes"}),
+        SearchHit(content="문서A-2", source="same.md", score=0.88, metadata={"category": "statutes"}),
+        SearchHit(content="문서A-3", source="same.md", score=0.87, metadata={"category": "statutes"}),
+        SearchHit(content="문서B-1", source="other.md", score=0.7, metadata={"category": "statutes"}),
     ]
     ranked = rerank_hits(
         hits=hits,
-        query="백엔드 jd",
-        role_hint="backend, api",
-        route_categories={"jd"},
+        query="근로기준법 조항",
+        role_hint="근로계약서, 임금",
+        route_categories={"statutes"},
         top_k=4,
         max_per_source=2,
         provider="heuristic",
@@ -79,17 +79,17 @@ def test_rerank_limits_same_source_by_max_per_source() -> None:
 def test_rerank_score_is_clipped_to_unit_interval() -> None:
     hits = [
         SearchHit(
-            content="백엔드 API 성능 개선과 트랜잭션 최적화 역량이 필요합니다.",
-            source="uploaded_jd_text",
+            content="근로기준법 제17조: 임금 구성항목·계산방법·지급방법을 서면 명시해야 합니다.",
+            source="uploaded_reference_text",
             score=0.96,
-            metadata={"category": "jd", "source_type": "jd_upload", "score_breakdown": {"fused": 0.96}},
+            metadata={"category": "statutes", "source_type": "reference_upload", "score_breakdown": {"fused": 0.96}},
         )
     ]
     ranked = rerank_hits(
         hits=hits,
-        query="백엔드 API 성능 개선",
-        role_hint="backend, api, server, database",
-        route_categories={"jd", "job_postings"},
+        query="근로기준법 임금 명시",
+        role_hint="근로계약서, 임금, 근로기준법",
+        route_categories={"statutes", "standard_contracts"},
         top_k=1,
         provider="heuristic",
         enabled=True,

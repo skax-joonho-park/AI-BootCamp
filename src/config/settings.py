@@ -8,7 +8,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from dotenv import load_dotenv
-from src.common import JobPilotError
+from src.common import LegalPilotError
 
 
 def _int_env(name: str, default: int) -> int:
@@ -58,8 +58,8 @@ class Settings:
     vector_weight: float = 0.6
     bm25_weight: float = 0.4
     rag_evidence_score_threshold: float = 0.45
-    ephemeral_jd_base_score: float = 0.42
-    ephemeral_resume_base_score: float = 0.36
+    ephemeral_ref_base_score: float = 0.42
+    ephemeral_contract_base_score: float = 0.36
     ephemeral_overlap_weight: float = 0.35
     rerank_enabled: bool = True
     rerank_provider: str = "heuristic"
@@ -79,7 +79,7 @@ class Settings:
     ui_history_pii_mask_enabled: bool = False
     ui_history_storage_mode: str = "summary"
     ui_page_icon_mode: str = "emoji"
-    ui_page_icon_emoji: str = "💼"
+    ui_page_icon_emoji: str = "⚖️"
     few_shot_max_examples: int = 1
 
     @property
@@ -120,8 +120,8 @@ def load_settings() -> Settings:
     vector_weight = _float_env("VECTOR_WEIGHT", 0.6)
     bm25_weight = _float_env("BM25_WEIGHT", 0.4)
     rag_evidence_score_threshold = _float_env("RAG_EVIDENCE_SCORE_THRESHOLD", 0.45)
-    ephemeral_jd_base_score = _float_env("EPHEMERAL_JD_BASE_SCORE", 0.42)
-    ephemeral_resume_base_score = _float_env("EPHEMERAL_RESUME_BASE_SCORE", 0.36)
+    ephemeral_ref_base_score = _float_env("EPHEMERAL_REF_BASE_SCORE", 0.42)
+    ephemeral_contract_base_score = _float_env("EPHEMERAL_CONTRACT_BASE_SCORE", 0.36)
     ephemeral_overlap_weight = _float_env("EPHEMERAL_OVERLAP_WEIGHT", 0.35)
     rerank_enabled = _bool_env("RERANK_ENABLED", True)
     rerank_provider = (os.getenv("RERANK_PROVIDER") or "heuristic").strip().lower() or "heuristic"
@@ -159,7 +159,7 @@ def load_settings() -> Settings:
     )
     ui_history_storage_mode = (os.getenv("UI_HISTORY_STORAGE_MODE") or "summary").strip().lower() or "summary"
     ui_page_icon_mode = (os.getenv("UI_PAGE_ICON_MODE") or "emoji").strip().lower() or "emoji"
-    ui_page_icon_emoji = (os.getenv("UI_PAGE_ICON_EMOJI") or "💼").strip() or "💼"
+    ui_page_icon_emoji = (os.getenv("UI_PAGE_ICON_EMOJI") or "⚖️").strip() or "⚖️"
     few_shot_max_examples = _int_env("FEW_SHOT_MAX_EXAMPLES", 1)
 
     missing = []
@@ -169,7 +169,7 @@ def load_settings() -> Settings:
         missing.append("AOAI_API_KEY")
 
     if missing:
-        raise JobPilotError(
+        raise LegalPilotError(
             error_code="CONFIG_MISSING_ENV",
             detail=f"Missing environment variables: {', '.join(missing)}",
             status_code=400,
@@ -197,8 +197,8 @@ def load_settings() -> Settings:
         vector_weight=vector_weight,
         bm25_weight=bm25_weight,
         rag_evidence_score_threshold=rag_evidence_score_threshold,
-        ephemeral_jd_base_score=ephemeral_jd_base_score,
-        ephemeral_resume_base_score=ephemeral_resume_base_score,
+        ephemeral_ref_base_score=ephemeral_ref_base_score,
+        ephemeral_contract_base_score=ephemeral_contract_base_score,
         ephemeral_overlap_weight=ephemeral_overlap_weight,
         rerank_enabled=rerank_enabled,
         rerank_provider=rerank_provider,

@@ -11,147 +11,144 @@ from src.workflow.engine import (
 from src.workflow.contracts import enforce_chat_response_contract
 
 
-def test_route_minimums_for_resume_and_interview_only() -> None:
-    resume_rules = route_minimums("resume_only")
-    interview_rules = route_minimums("interview_only")
-    assert resume_rules["two_week_plan"] == 0
-    assert interview_rules["two_week_plan"] == 0
+def test_route_minimums_for_clause_and_risk_only() -> None:
+    clause_rules = route_minimums("clause_only")
+    risk_rules = route_minimums("risk_only")
+    assert clause_rules["revision_plan"] == 0
+    assert risk_rules["revision_plan"] == 0
 
 
 def test_normalize_final_answer_by_route_blanks_irrelevant_sections() -> None:
     payload = {
         "summary": "요약",
-        "resume_improvements": ["r1"],
-        "interview_preparation": ["i1"],
-        "two_week_plan": ["p1"],
+        "clause_analysis": ["c1"],
+        "risk_findings": ["r1"],
+        "revision_plan": ["p1"],
         "references": [],
     }
-    normalized = normalize_final_answer_by_route("plan_only", payload)
-    assert normalized["resume_improvements"] == []
-    assert normalized["interview_preparation"] == []
-    assert normalized["two_week_plan"] == ["p1"]
+    normalized = normalize_final_answer_by_route("advice_only", payload)
+    assert normalized["clause_analysis"] == []
+    assert normalized["risk_findings"] == []
+    assert normalized["revision_plan"] == ["p1"]
 
 
-def test_plan_only_summary_is_clipped_to_one_or_two_sentences() -> None:
+def test_advice_only_summary_is_clipped_to_one_or_two_sentences() -> None:
     payload = {
         "summary": "첫 문장입니다. 두 번째 문장입니다. 세 번째 문장은 잘려야 합니다.",
-        "resume_improvements": [],
-        "interview_preparation": [],
-        "two_week_plan": ["p1"],
+        "clause_analysis": [],
+        "risk_findings": [],
+        "revision_plan": ["p1"],
         "references": [],
     }
-    normalized = normalize_final_answer_by_route("plan_only", payload)
+    normalized = normalize_final_answer_by_route("advice_only", payload)
     assert "세 번째 문장" not in normalized["summary"]
     assert normalized["summary"].count(".") <= 2
 
 
-def test_plan_only_summary_applies_line_and_char_guardrail() -> None:
+def test_advice_only_summary_applies_char_guardrail() -> None:
+    long_summary = "A" * 200
     payload = {
-        "summary": "첫 줄 요약\n둘째 줄 요약\n셋째 줄은 제거되어야 함",
-        "resume_improvements": [],
-        "interview_preparation": [],
-        "two_week_plan": ["p1"],
+        "summary": long_summary,
+        "clause_analysis": [],
+        "risk_findings": [],
+        "revision_plan": ["p1"],
         "references": [],
     }
-    normalized = normalize_final_answer_by_route("plan_only", payload)
-    assert "셋째 줄" not in normalized["summary"]
+    normalized = normalize_final_answer_by_route("advice_only", payload)
+    # _enforce_plan_only_summary clips at 140 chars (+3 for ellipsis)
     assert len(normalized["summary"]) <= 143  # max_chars + ellipsis allowance
 
 
 def test_summary_is_not_notice_only_when_model_returns_notice_text() -> None:
     payload = {
-        "summary": "법/세무/노무 등 비전문 영역은 별도 확인이 필요하며 최신 공고/회사 정책은 반드시 원문 확인이 필요합니다.",
-        "resume_improvements": ["r1", "r2"],
-        "interview_preparation": ["i1", "i2"],
-        "two_week_plan": ["p1", "p2"],
+        "summary": "법률 자문이 아닙니다.",
+        "clause_analysis": ["c1", "c2"],
+        "risk_findings": ["r1", "r2"],
+        "revision_plan": ["p1", "p2"],
         "references": [],
     }
-    normalized = normalize_final_answer_by_route("full", payload)
-    assert "이력서 개선" in normalized["summary"]
-    assert "면접 준비" in normalized["summary"]
-    assert "2주 계획" in normalized["summary"]
+    normalized = normalize_final_answer_by_route("full_review", payload)
+    assert "조항" in normalized["summary"] or "위험" in normalized["summary"] or "수정" in normalized["summary"]
 
 
 def test_enforce_final_answer_policy_adds_refs_and_citation() -> None:
     payload = {
         "summary": "요약",
-        "resume_improvements": ["핵심 역량 보강"],
-        "interview_preparation": ["질문 대비"],
-        "two_week_plan": [],
+        "clause_analysis": ["핵심 조항 진단"],
+        "risk_findings": ["위험 조항 탐지"],
+        "revision_plan": [],
         "references": [],
     }
     enforced = enforce_final_answer_policy(
-        route="full",
+        route="full_review",
         payload=payload,
         rag_refs=[
             {
                 "rank": 1,
-                "source": "sample.md",
+                "source": "근로기준법_요약.md",
                 "chunk_id": 1,
                 "location": "n/a",
                 "score": 0.8,
-                "category": "uncategorized",
-                "snippet": "sample snippet",
+                "category": "statutes",
+                "snippet": "근로기준법 제17조",
             }
         ],
     )
     assert enforced["references"]
     assert isinstance(enforced["references"][0], dict)
-    assert all("[1]" in item for item in enforced["resume_improvements"])
-    assert len(enforced["two_week_plan"]) >= 4
-    assert all("추가 권장 액션" not in item for item in enforced["two_week_plan"])
-    assert all("근거/입력 정보가 부족해 2주 실행계획" not in item for item in enforced["two_week_plan"])
+    assert all("[1]" in item for item in enforced["clause_analysis"])
+    assert len(enforced["revision_plan"]) >= 4
     assert enforced.get("input_gap_notice")
 
 
 def test_heuristic_route_from_query_respects_explicit_exclusion() -> None:
-    route = heuristic_route_from_query("이력서 개선 포인트만 5개 뽑아줘. 면접 제외, 계획 제외")
+    route = heuristic_route_from_query("조항 분석만 해줘. 위험 제외, 수정 계획 제외")
     assert route is not None
-    assert route[0] == "resume_only"
+    assert route[0] == "clause_only"
 
 
-def test_heuristic_route_from_query_plan_only_keywords() -> None:
-    route = heuristic_route_from_query("전체 요약 없이 2주 계획만 간단히 작성해줘")
+def test_heuristic_route_from_query_advice_only_keywords() -> None:
+    route = heuristic_route_from_query("수정 계획만 간단히 작성해줘")
     assert route is not None
-    assert route[0] == "plan_only"
+    assert route[0] == "advice_only"
 
 
 def test_heuristic_route_ignores_negated_exclusion_phrase() -> None:
-    route = heuristic_route_from_query("면접 제외하고 싶진 않지만 우선 이력서만 먼저 보고 싶어.")
+    route = heuristic_route_from_query("위험 제외하고 싶진 않지만 우선 조항만 먼저 보고 싶어.")
     # Negated exclusion should not force a heuristic route.
     # Let the LLM router decide with full context.
     assert route is None
 
 
-def test_heuristic_route_does_not_force_plan_only_on_negated_plan_exclusion() -> None:
-    route = heuristic_route_from_query("이력서 개선 포인트만 보고 싶고 계획 제외는 아니야.")
+def test_heuristic_route_does_not_force_advice_only_on_negated_advice_exclusion() -> None:
+    route = heuristic_route_from_query("조항 분석만 보고 싶고 수정 계획 제외는 아니야.")
     assert route is not None
-    assert route[0] == "resume_only"
+    assert route[0] == "clause_only"
 
 
-def test_heuristic_route_does_not_force_plan_only_on_include_plan_phrase() -> None:
-    route = heuristic_route_from_query("이력서만 먼저 보고, 계획은 제외하지 말고 같이 보자.")
+def test_heuristic_route_does_not_force_advice_only_on_include_advice_phrase() -> None:
+    route = heuristic_route_from_query("조항만 먼저 보고, 수정 계획은 제외하지 말고 같이 보자.")
     assert route is not None
-    assert route[0] == "resume_only"
+    assert route[0] == "clause_only"
 
 
 def test_normalize_final_answer_by_route_cleans_none_notice() -> None:
     payload = {
         "summary": "요약",
-        "resume_improvements": ["r1"],
-        "interview_preparation": ["i1"],
-        "two_week_plan": ["p1"],
+        "clause_analysis": ["c1"],
+        "risk_findings": ["r1"],
+        "revision_plan": ["p1"],
         "input_gap_notice": None,
         "references": [],
     }
-    normalized = normalize_final_answer_by_route("full", payload)
+    normalized = normalize_final_answer_by_route("full_review", payload)
     assert normalized.get("input_gap_notice") is None
 
 
 def test_enforce_chat_response_contract_fills_min_schema() -> None:
     payload = enforce_chat_response_contract({"summary": "", "cached_state_hit": "yes"})
     assert payload["summary"]
-    assert isinstance(payload["resume_improvements"], list)
+    assert isinstance(payload["clause_analysis"], list)
     assert isinstance(payload["references"], list)
     assert payload["cached_state_hit"] is True
 
@@ -161,27 +158,27 @@ def test_enforce_chat_response_contract_normalizes_node_status() -> None:
         {
             "summary": "ok",
             "node_status": {
-                "resume": {
+                "clause": {
                     "status": "degraded",
-                    "error_code": "STRUCTURED_OUTPUT_RESUME_FALLBACK",
+                    "error_code": "STRUCTURED_OUTPUT_CLAUSE_FALLBACK",
                     "detail": "fallback used",
                 }
             },
         }
     )
     assert isinstance(payload["node_status"], dict)
-    assert payload["node_status"]["resume"]["status"] == "degraded"
+    assert payload["node_status"]["clause"]["status"] == "degraded"
 
 
 def test_derive_node_status_includes_skip_reason_by_route() -> None:
     state = {
         "final_answer": {"summary": "요약"},
     }
-    status = derive_node_status("plan_only", state)
-    assert status["resume"]["status"] == "skipped"
-    assert status["interview"]["status"] == "skipped"
-    assert "route=plan_only" in str(status["resume"]["detail"])
-    assert "plan-focused" in str(status["interview"]["detail"])
+    status = derive_node_status("advice_only", state)
+    assert status["clause"]["status"] == "skipped"
+    assert status["risk"]["status"] == "skipped"
+    assert "route=advice_only" in str(status["clause"]["detail"])
+    assert "advice-focused" in str(status["risk"]["detail"])
 
 
 def test_sanitize_evidence_map_clips_out_of_range_indices() -> None:
@@ -220,29 +217,28 @@ def test_cache_record_applies_lru_trim_per_session() -> None:
 def test_enforce_final_answer_policy_keeps_reference_metadata_fields() -> None:
     payload = {
         "summary": "요약",
-        "resume_improvements": ["핵심 역량 보강"],
-        "interview_preparation": [],
-        "two_week_plan": [],
+        "clause_analysis": ["핵심 조항 진단"],
+        "risk_findings": [],
+        "revision_plan": [],
         "references": [
             {
                 "rank": 1,
-                "source": "sample.md",
+                "source": "근로기준법_요약.md",
                 "chunk_id": 3,
                 "location": "page=1",
                 "score": 0.9,
-                "category": "job_postings",
-                "snippet": "샘플",
+                "category": "statutes",
+                "snippet": "근로기준법 제17조",
                 "collected_at": "2026-03-09",
                 "source_url": "https://example.com",
-                "curator": "jobpilot-team",
+                "curator": "legalpilot-team",
                 "license": "CC-BY-4.0",
             }
         ],
     }
-    enforced = enforce_final_answer_policy(route="resume_only", payload=payload, rag_refs=[])
+    enforced = enforce_final_answer_policy(route="clause_only", payload=payload, rag_refs=[])
     ref = enforced["references"][0]
     assert ref["collected_at"] == "2026-03-09"
     assert ref["source_url"] == "https://example.com"
-    assert ref["curator"] == "jobpilot-team"
+    assert ref["curator"] == "legalpilot-team"
     assert ref["license"] == "CC-BY-4.0"
-

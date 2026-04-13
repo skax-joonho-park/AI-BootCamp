@@ -1,4 +1,4 @@
-"""LangGraph multi-agent workflow for JobPilot AI."""
+"""LangGraph multi-agent workflow for LegalPilot AI."""
 
 from __future__ import annotations
 
@@ -15,11 +15,11 @@ from langchain_core.tools import BaseTool, tool
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 from pydantic import BaseModel, Field
-from typing_extensions import TypedDict
+from typing import TypedDict
 
-from src.agents.schemas import FinalAnswer, InterviewNotes, PlanNotes, ResumeNotes
-from src.agents.tools import interview_question_bank, jd_resume_gap_score, resume_keyword_match_score
-from src.common import ErrorCodes, JobPilotError
+from src.agents.schemas import ClauseNotes, FinalAnswer, RevisionNotes, RiskNotes
+from src.agents.tools import clause_keyword_match_score, contract_reference_gap_score, legal_issue_bank
+from src.common import ErrorCodes, LegalPilotError
 from src.config import get_chat_model, load_settings
 from src.retrieval import HybridRetriever, SearchHit, rerank_hits
 from src.utils.memory import SessionMemory
@@ -32,15 +32,15 @@ from src.workflow.contracts import (
     enforce_chat_response_contract,
 )
 from src.workflow.prompts import (
+    ADVICE_ONLY_MARKERS,
+    CLAUSE_ONLY_MARKERS,
     EXCLUSION_TERMS,
     EXCLUSION_PATTERNS,
     INTENT_KEYWORDS,
-    INTERVIEW_ONLY_MARKERS,
     NEGATION_PATTERNS,
-    PLAN_ONLY_MARKERS,
     PROMPT_RULE_ALL_FIELDS_KOREAN,
     PROMPT_RULE_RESULT_ONLY,
-    RESUME_ONLY_MARKERS,
+    RISK_ONLY_MARKERS,
     STRUCTURED_JSON_REPAIR_INSTRUCTION,
     TOOL_LOOP_FINALIZATION_INSTRUCTION,
     build_common_policy_block,
@@ -53,24 +53,24 @@ from src.workflow.prompts import (
 class AgentState(TypedDict, total=False):
     session_id: str
     user_query: str
-    target_role: str
-    resume_text: str
-    jd_text: str
+    document_type: str
+    contract_text: str
+    reference_text: str
     memory_messages: list[dict[str, str]]
     rag_context: str
     rag_refs: list[dict[str, Any]]
     rag_low_confidence: bool
     route: str
     routing_reason: str
-    resume_notes: dict[str, Any]
-    interview_notes: dict[str, Any]
-    plan_notes: dict[str, Any]
+    clause_notes: dict[str, Any]
+    risk_notes: dict[str, Any]
+    revision_notes: dict[str, Any]
     final_answer: dict[str, Any]
     node_status: dict[str, Any]
 
 
 class RouteDecision(BaseModel):
-    route: Literal["resume_only", "interview_only", "full", "plan_only"] = Field(
+    route: Literal["clause_only", "risk_only", "full_review", "advice_only"] = Field(
         description="Supervisor가 선택한 라우팅 결과"
     )
     reason: str = Field(description="해당 라우팅을 선택한 이유")
@@ -129,9 +129,9 @@ def heuristic_route_from_query(user_query: str) -> tuple[str, str] | None:
         return False
 
     def _has_plan_only_marker_intent() -> bool:
-        if not _has_any(PLAN_ONLY_MARKERS):
+        if not _has_any(ADVICE_ONLY_MARKERS):
             return False
-        plan_term_window = "|".join(re.escape(term) for term in EXCLUSION_TERMS["plan"] if term)
+        plan_term_window = "|".join(re.escape(term) for term in EXCLUSION_TERMS["advice"] if term)
         has_negated_plan_exclusion = any(
             re.search(
                 rf"({plan_term_window}).{{0,20}}(제외|빼|말고).{{0,20}}{re.escape(neg)}",
@@ -143,58 +143,58 @@ def heuristic_route_from_query(user_query: str) -> tuple[str, str] | None:
             return False
         return True
 
-    exclude_resume = _has_exclusion_intent(EXCLUSION_TERMS["resume"])
-    exclude_interview = _has_exclusion_intent(EXCLUSION_TERMS["interview"])
-    exclude_plan = _has_exclusion_intent(EXCLUSION_TERMS["plan"])
-    want_resume = _has_any(INTENT_KEYWORDS["resume"])
-    want_interview = _has_any(INTENT_KEYWORDS["interview"])
-    want_plan = _has_any(INTENT_KEYWORDS["plan"])
+    exclude_resume = _has_exclusion_intent(EXCLUSION_TERMS["clause"])
+    exclude_interview = _has_exclusion_intent(EXCLUSION_TERMS["risk"])
+    exclude_plan = _has_exclusion_intent(EXCLUSION_TERMS["advice"])
+    want_resume = _has_any(INTENT_KEYWORDS["clause"])
+    want_interview = _has_any(INTENT_KEYWORDS["risk"])
+    want_plan = _has_any(INTENT_KEYWORDS["advice"])
 
     if _has_plan_only_marker_intent():
-        return ("plan_only", "휴리스틱 라우팅: 계획 전용 요청 키워드 감지")
-    if _has_any(RESUME_ONLY_MARKERS) and not want_interview:
-        return ("resume_only", "휴리스틱 라우팅: 이력서 전용/면접 제외 키워드 감지")
-    if _has_any(INTERVIEW_ONLY_MARKERS) and not want_resume:
-        return ("interview_only", "휴리스틱 라우팅: 면접 전용/이력서 제외 키워드 감지")
+        return ("advice_only", "휴리스틱 라우팅: 수정 계획 전용 요청 키워드 감지")
+    if _has_any(CLAUSE_ONLY_MARKERS) and not want_interview:
+        return ("clause_only", "휴리스틱 라우팅: 조항 분석 전용/위험 제외 키워드 감지")
+    if _has_any(RISK_ONLY_MARKERS) and not want_resume:
+        return ("risk_only", "휴리스틱 라우팅: 위험 조항 전용/조항 분석 제외 키워드 감지")
 
     if exclude_interview and exclude_plan and not exclude_resume:
-        return ("resume_only", "휴리스틱 라우팅: 면접/계획 제외 요청")
+        return ("clause_only", "휴리스틱 라우팅: 위험/수정 제외 요청")
     if exclude_resume and exclude_plan and not exclude_interview:
-        return ("interview_only", "휴리스틱 라우팅: 이력서/계획 제외 요청")
+        return ("risk_only", "휴리스틱 라우팅: 조항/수정 제외 요청")
     if exclude_resume and exclude_interview and not exclude_plan:
-        return ("plan_only", "휴리스틱 라우팅: 이력서/면접 제외 요청")
+        return ("advice_only", "휴리스틱 라우팅: 조항/위험 제외 요청")
     if exclude_interview and want_resume and not want_plan:
-        return ("resume_only", "휴리스틱 라우팅: 면접 제외 + 이력서 의도")
+        return ("clause_only", "휴리스틱 라우팅: 위험 제외 + 조항 분석 의도")
     if exclude_resume and want_interview and not want_plan:
-        return ("interview_only", "휴리스틱 라우팅: 이력서 제외 + 면접 의도")
+        return ("risk_only", "휴리스틱 라우팅: 조항 제외 + 위험 탐지 의도")
 
     return None
 
 
 def route_minimums(route: str) -> dict[str, int]:
-    route_key = (route or "full").lower()
-    if route_key == "resume_only":
+    route_key = (route or "full_review").lower()
+    if route_key == "clause_only":
         return {
-            "resume_improvements": 4,
-            "interview_preparation": 0,
-            "two_week_plan": 0,
+            "clause_analysis": 4,
+            "risk_findings": 0,
+            "revision_plan": 0,
         }
-    if route_key == "interview_only":
+    if route_key == "risk_only":
         return {
-            "resume_improvements": 0,
-            "interview_preparation": 4,
-            "two_week_plan": 0,
+            "clause_analysis": 0,
+            "risk_findings": 4,
+            "revision_plan": 0,
         }
-    if route_key == "plan_only":
+    if route_key == "advice_only":
         return {
-            "resume_improvements": 0,
-            "interview_preparation": 0,
-            "two_week_plan": 4,
+            "clause_analysis": 0,
+            "risk_findings": 0,
+            "revision_plan": 4,
         }
     return {
-        "resume_improvements": 4,
-        "interview_preparation": 4,
-        "two_week_plan": 4,
+        "clause_analysis": 4,
+        "risk_findings": 4,
+        "revision_plan": 4,
     }
 
 
@@ -213,7 +213,7 @@ def _split_summary_sentences(text: str) -> list[str]:
 
 
 def _enforce_plan_only_summary(summary: str, max_chars: int = 140) -> str:
-    base = "요청에 따라 2주 실행계획 중심으로 핵심만 요약해 제공합니다."
+    base = "요청에 따라 수정 계획 중심으로 핵심만 요약해 제공합니다."
     raw_text = str(summary or "")
     normalized = " ".join(raw_text.split()).strip()
     if not normalized:
@@ -237,12 +237,12 @@ def _enforce_plan_only_summary(summary: str, max_chars: int = 140) -> str:
 
 
 def _scope_notice(route: str) -> str:
-    route_key = (route or "full").lower()
-    if route_key == "plan_only":
-        return "법/세무/노무 등 전문 자문은 별도 확인이 필요하며 최신 공고/사내 정책은 원문을 확인하세요."
+    route_key = (route or "full_review").lower()
+    if route_key == "advice_only":
+        return "본 검토 의견은 법적 자문이 아니며, 실제 계약 체결 전 반드시 전문 법률가의 검토를 받으세요."
     return (
-        "안내: 본 답변은 취업 준비 일반 정보이며 법/세무/노무 자문이 아닙니다. "
-        "최신 공고/회사 정책은 반드시 원문으로 확인하세요."
+        "안내: 본 답변은 일반적인 계약서 검토 참고 정보이며 법률 자문이 아닙니다. "
+        "실제 계약 체결 전 반드시 전문 법률가의 확인이 필요합니다."
     )
 
 
@@ -250,25 +250,25 @@ def _attach_scope_notice(route: str, summary: str) -> str:
     text = " ".join(str(summary or "").split()).strip()
     if not text:
         text = "요청에 대한 핵심 요약입니다."
-    if "법/세무/노무" in text and ("원문" in text or "최신 공고" in text):
+    if "법률 자문이 아닙니다" in text or "전문 법률가" in text:
         return text
     return f"{text} {_scope_notice(route)}".strip()
 
 
 def _compose_core_summary(route: str, answer: dict[str, Any]) -> str:
-    route_key = (route or "full").lower()
-    resume_len = len(list(answer.get("resume_improvements", []) or []))
-    interview_len = len(list(answer.get("interview_preparation", []) or []))
-    plan_len = len(list(answer.get("two_week_plan", []) or []))
-    if route_key == "plan_only":
-        return f"2주 실행 계획 핵심 {max(plan_len, 1)}개를 우선순위 중심으로 정리했습니다."
-    if route_key == "resume_only":
-        return f"이력서 개선 핵심 {max(resume_len, 1)}개를 우선순위로 정리했습니다."
-    if route_key == "interview_only":
-        return f"면접 준비 핵심 {max(interview_len, 1)}개를 질문/답변 방향 중심으로 정리했습니다."
+    route_key = (route or "full_review").lower()
+    clause_len = len(list(answer.get("clause_analysis", []) or []))
+    risk_len = len(list(answer.get("risk_findings", []) or []))
+    revision_len = len(list(answer.get("revision_plan", []) or []))
+    if route_key == "advice_only":
+        return f"수정 계획 핵심 {max(revision_len, 1)}개를 우선순위 중심으로 정리했습니다."
+    if route_key == "clause_only":
+        return f"조항 분석 핵심 {max(clause_len, 1)}개를 우선순위로 정리했습니다."
+    if route_key == "risk_only":
+        return f"위험 조항 탐지 핵심 {max(risk_len, 1)}개를 리스크/대응 방향 중심으로 정리했습니다."
     return (
-        f"이력서 개선 {max(resume_len, 1)}개, 면접 준비 {max(interview_len, 1)}개, "
-        f"2주 계획 {max(plan_len, 1)}개를 통합 정리했습니다."
+        f"조항 분석 {max(clause_len, 1)}개, 위험 조항 {max(risk_len, 1)}개, "
+        f"수정 계획 {max(revision_len, 1)}개를 통합 정리했습니다."
     )
 
 
@@ -276,10 +276,10 @@ def _looks_notice_only(summary: str) -> bool:
     text = " ".join(str(summary or "").split()).strip()
     if not text:
         return True
-    has_notice = "법/세무/노무" in text and ("원문" in text or "최신 공고" in text)
+    has_notice = ("법률 자문이 아닙니다" in text or "전문 법률가" in text)
     if not has_notice:
         return False
-    core_keywords = ("이력서", "면접", "계획", "핵심", "정리", "액션", "우선순위")
+    core_keywords = ("조항", "위험", "수정", "검토", "핵심", "정리", "액션", "우선순위")
     return not any(keyword in text for keyword in core_keywords)
 
 
@@ -295,11 +295,11 @@ def _clean_optional_notice(value: Any) -> str | None:
 
 
 def normalize_final_answer_by_route(route: str, answer: dict[str, Any]) -> dict[str, Any]:
-    route_key = (route or "full").lower()
+    route_key = (route or "full_review").lower()
     summary = str(answer.get("summary", "")).strip()
     if not summary:
-        if route_key == "plan_only":
-            summary = "요청에 따라 2주 실행계획 중심으로 핵심만 요약해 제공합니다."
+        if route_key == "advice_only":
+            summary = "요청에 따라 수정 계획 중심으로 핵심만 요약해 제공합니다."
         else:
             summary = "요청에 대한 핵심 요약입니다."
     if _looks_notice_only(summary):
@@ -307,20 +307,20 @@ def normalize_final_answer_by_route(route: str, answer: dict[str, Any]) -> dict[
     summary = _attach_scope_notice(route_key, summary)
     if _looks_notice_only(summary):
         summary = _attach_scope_notice(route_key, _compose_core_summary(route_key, answer))
-    if route_key == "plan_only":
+    if route_key == "advice_only":
         summary = _enforce_plan_only_summary(summary)
     payload = {
         "summary": summary,
-        "resume_improvements": list(answer.get("resume_improvements", []) or []),
-        "interview_preparation": list(answer.get("interview_preparation", []) or []),
-        "two_week_plan": list(answer.get("two_week_plan", []) or []),
+        "clause_analysis": list(answer.get("clause_analysis", []) or []),
+        "risk_findings": list(answer.get("risk_findings", []) or []),
+        "revision_plan": list(answer.get("revision_plan", []) or []),
         "input_gap_notice": _clean_optional_notice(answer.get("input_gap_notice")),
         "references": list(answer.get("references", []) or []),
     }
-    if route_key in {"interview_only", "plan_only"}:
-        payload["resume_improvements"] = []
-    if route_key in {"resume_only", "plan_only"}:
-        payload["interview_preparation"] = []
+    if route_key in {"risk_only", "advice_only"}:
+        payload["clause_analysis"] = []
+    if route_key in {"clause_only", "advice_only"}:
+        payload["risk_findings"] = []
     return payload
 
 
@@ -534,35 +534,35 @@ def _upsert_cache_record(
 
 def derive_node_status(route: str, state: AgentState) -> dict[str, dict[str, Any]]:
     """Build partial-failure status for each node without failing whole response."""
-    route_key = (route or "full").lower()
-    run_resume = route_key in {"full", "resume_only"}
-    run_interview = route_key in {"full", "interview_only"}
-    run_plan = route_key in {"full", "plan_only"}
+    route_key = (route or "full_review").lower()
+    run_clause = route_key in {"full_review", "clause_only"}
+    run_risk = route_key in {"full_review", "risk_only"}
+    run_advice = route_key in {"full_review", "advice_only"}
     node_status: dict[str, dict[str, Any]] = {
         "supervisor": {"status": "ok", "error_code": None, "detail": None},
         "rag": {"status": "ok", "error_code": None, "detail": None},
-        "resume": {"status": "skipped", "error_code": None, "detail": None},
-        "interview": {"status": "skipped", "error_code": None, "detail": None},
-        "plan": {"status": "skipped", "error_code": None, "detail": None},
+        "clause": {"status": "skipped", "error_code": None, "detail": None},
+        "risk": {"status": "skipped", "error_code": None, "detail": None},
+        "advice": {"status": "skipped", "error_code": None, "detail": None},
         "synthesis": {"status": "ok", "error_code": None, "detail": None},
     }
-    if run_resume:
-        node_status["resume"]["status"] = "ok"
-    if run_interview:
-        node_status["interview"]["status"] = "ok"
-    if run_plan:
-        node_status["plan"]["status"] = "ok"
+    if run_clause:
+        node_status["clause"]["status"] = "ok"
+    if run_risk:
+        node_status["risk"]["status"] = "ok"
+    if run_advice:
+        node_status["advice"]["status"] = "ok"
 
     def _fill_skip_detail(node_name: str) -> None:
         if node_status.get(node_name, {}).get("status") != "skipped":
             return
         detail = f"Skipped by route policy (route={route_key})."
-        if route_key == "plan_only" and node_name in {"resume", "interview"}:
-            detail = f"Skipped by route policy (route={route_key}; plan-focused execution)."
-        elif route_key == "resume_only" and node_name in {"interview", "plan"}:
-            detail = f"Skipped by route policy (route={route_key}; resume-focused execution)."
-        elif route_key == "interview_only" and node_name in {"resume", "plan"}:
-            detail = f"Skipped by route policy (route={route_key}; interview-focused execution)."
+        if route_key == "advice_only" and node_name in {"clause", "risk"}:
+            detail = f"Skipped by route policy (route={route_key}; advice-focused execution)."
+        elif route_key == "clause_only" and node_name in {"risk", "advice"}:
+            detail = f"Skipped by route policy (route={route_key}; clause-focused execution)."
+        elif route_key == "risk_only" and node_name in {"clause", "advice"}:
+            detail = f"Skipped by route policy (route={route_key}; risk-focused execution)."
         node_status[node_name]["detail"] = detail
 
     def _mark_if_fallback(node_name: str, payload: dict[str, Any] | None) -> None:
@@ -579,13 +579,13 @@ def derive_node_status(route: str, state: AgentState) -> dict[str, dict[str, Any
                 node_status[node_name]["detail"] = text[:240]
                 return
 
-    if run_resume:
-        _mark_if_fallback("resume", state.get("resume_notes"))
-    if run_interview:
-        _mark_if_fallback("interview", state.get("interview_notes"))
-    if run_plan:
-        _mark_if_fallback("plan", state.get("plan_notes"))
-    for skipped_node in ("resume", "interview", "plan"):
+    if run_clause:
+        _mark_if_fallback("clause", state.get("clause_notes"))
+    if run_risk:
+        _mark_if_fallback("risk", state.get("risk_notes"))
+    if run_advice:
+        _mark_if_fallback("advice", state.get("revision_notes"))
+    for skipped_node in ("clause", "risk", "advice"):
         _fill_skip_detail(skipped_node)
 
     final_answer = state.get("final_answer") or {}
@@ -602,32 +602,32 @@ def derive_node_status(route: str, state: AgentState) -> dict[str, dict[str, Any
 
 
 def _make_insufficient_input_item(field_name: str, idx: int) -> str:
-    if field_name == "two_week_plan":
+    if field_name == "revision_plan":
         defaults = [
-            "이번 주 안에 지원 직무 핵심역량 3개를 선정하고 현재 수준(상/중/하) 진단표를 작성하세요.",
-            "이틀 내 이력서 핵심 불릿 5개를 JD 키워드 기준으로 재작성하고 각 항목에 정량 지표 1개 이상을 추가하세요.",
-            "1주차 말까지 예상 질문 10개 답변 초안을 STAR 형식으로 작성하고 약한 답변 3개를 우선 보완하세요.",
-            "2주차에 모의 면접 2회를 진행하고 피드백 3개를 반영해 최종 지원본(이력서/포트폴리오)을 확정하세요.",
+            "계약서 내 문제 조항을 우선순위별로 목록화하고 수정 방향을 초안으로 작성하세요.",
+            "참조 법령/표준 계약서와 대조하여 누락된 필수 조항을 추가 초안으로 작성하세요.",
+            "위험 조항별 대안 문구를 법적 근거와 함께 작성하고 상대방과 협의 항목을 선별하세요.",
+            "수정 완료 후 체크리스트를 작성하여 모든 조항이 법령 기준에 부합하는지 검증하세요.",
         ]
         return defaults[min(max(idx - 1, 0), len(defaults) - 1)]
 
     prompts = {
-        "resume_improvements": (
-            "근거/입력 정보가 부족해 맞춤 이력서 개선 항목 생성이 제한됩니다. "
-            "경력연차, 핵심 프로젝트, 지원 회사 정보를 추가로 제공해 주세요."
+        "clause_analysis": (
+            "근거/입력 정보가 부족해 맞춤 조항 분석 항목 생성이 제한됩니다. "
+            "계약서 원문, 계약 유형, 당사자 정보를 추가로 제공해 주세요."
         ),
-        "interview_preparation": (
-            "근거/입력 정보가 부족해 맞춤 면접 대비 항목 생성이 제한됩니다. "
-            "지원 포지션, 예상 면접 유형, 핵심 성과 지표를 추가로 알려주세요."
+        "risk_findings": (
+            "근거/입력 정보가 부족해 맞춤 위험 조항 탐지 항목 생성이 제한됩니다. "
+            "계약서 원문, 참조 법령, 주요 우려 사항을 추가로 알려주세요."
         ),
-        "two_week_plan": (
-            "근거/입력 정보가 부족해 2주 실행계획 세부화가 제한됩니다. "
-            "목표 회사, 일정 제약, 우선순위 역량을 추가로 제공해 주세요."
+        "revision_plan": (
+            "근거/입력 정보가 부족해 수정 계획 세부화가 제한됩니다. "
+            "계약서 원문, 협의 가능 범위, 우선순위 조항을 추가로 제공해 주세요."
         ),
     }
     base = prompts.get(
         field_name,
-        "근거/입력 정보가 부족합니다. 세부 조건(경력연차, 지원회사, 핵심 프로젝트)을 추가로 알려주세요.",
+        "근거/입력 정보가 부족합니다. 계약서 원문, 계약 유형, 주요 우려 사항을 추가로 알려주세요.",
     )
     return f"{base} (추가 확인 {idx})"
 
@@ -653,10 +653,10 @@ def enforce_final_answer_policy(
             payload[field_name] = []
             continue
         if len(normalized_items) < minimum:
-            if field_name == "two_week_plan" and not input_gap_notice:
+            if field_name == "revision_plan" and not input_gap_notice:
                 input_gap_notice = (
-                    "입력 정보가 제한되어 기본 실행 플랜을 함께 제시했습니다. "
-                    "목표 회사, 일정 제약, 우선순위 역량을 추가로 입력하면 더 구체화할 수 있습니다."
+                    "입력 정보가 제한되어 기본 수정 계획을 함께 제시했습니다. "
+                    "계약서 원문, 협의 가능 범위, 우선순위 조항을 추가로 입력하면 더 구체화할 수 있습니다."
                 )
             for idx in range(len(normalized_items) + 1, minimum + 1):
                 normalized_items.append(_make_insufficient_input_item(field_name, idx))
@@ -793,7 +793,7 @@ def _needs_citation_rewrite(payload: dict[str, Any], references: list[dict[str, 
     if not references:
         return False
     max_ref = len(references)
-    for field_name in ("resume_improvements", "interview_preparation", "two_week_plan"):
+    for field_name in ("clause_analysis", "risk_findings", "revision_plan"):
         items = payload.get(field_name, [])
         if not isinstance(items, list):
             continue
@@ -827,105 +827,103 @@ def build_graph(retriever: HybridRetriever, memory: SessionMemory):
     rag_planner_llm = get_chat_model(temperature=0.1)
     plan_llm = get_chat_model(temperature=0.15)
     synthesis_llm = get_chat_model(temperature=0.1)
-    resume_system_prompt = build_specialist_system_prompt(
-        "Resume Agent", "이력서/JD 갭 분석에 집중하고 필요 시 도구를 자율 호출하세요."
+    clause_system_prompt = build_specialist_system_prompt(
+        "Clause Analyzer Agent", "계약서 조항 분석 및 표준 계약 대비 갭 분석에 집중하고 필요 시 도구를 자율 호출하세요."
     )
-    interview_system_prompt = build_specialist_system_prompt(
-        "Interview Agent", "근거 기반 면접 코칭에 집중하고 필요 시 도구를 자율 호출하세요."
+    risk_system_prompt = build_specialist_system_prompt(
+        "Risk Detection Agent", "근거 기반 위험 조항 탐지 및 법적 리스크 코칭에 집중하고 필요 시 도구를 자율 호출하세요."
     )
-    plan_system_prompt = build_specialist_system_prompt(
-        "Plan Agent", "근거 기반 실행계획을 작성하고 필요 시 추가 검색 도구를 자율 호출하세요."
+    advice_system_prompt = build_specialist_system_prompt(
+        "Revision Advisor Agent", "근거 기반 수정 계획을 작성하고 필요 시 추가 검색 도구를 자율 호출하세요."
     )
-    resume_few_shot_defaults = {
-        "backend": """
+    clause_few_shot_defaults = {
+        "근로계약서": """
 [Few-shot 예시]
 입력:
-- 목표 직무: 백엔드 개발자
-- 이력서 요약: "Spring 기반 API 개발, 성능 개선 경험 없음"
+- 계약서 유형: 근로계약서
+- 계약서 요약: "포괄임금제 적용, 근로시간 명시 없음"
 출력 스타일:
-- 개선 포인트:
-  1) 성능 개선 지표(응답시간/처리량) 추가
-  2) DB 튜닝 사례(인덱스/쿼리 최적화) 명시
-  3) 장애 대응 경험과 재발 방지 액션 포함
+- 핵심 조항 진단:
+  1) 근로기준법 제17조 위반 가능성: 근로시간·임금 항목 미기재
+  2) 포괄임금제 유효 요건 미충족(개별 합의서 부재)
+  3) 연장·야간·휴일수당 산정 기준 불명확
 """.strip(),
-        "data": """
+        "임대차계약서": """
 [Few-shot 예시]
 입력:
-- 목표 직무: 데이터 분석가
-- 이력서 요약: "대시보드 제작 경험 위주"
+- 계약서 유형: 임대차계약서
+- 계약서 요약: "임대인 일방 해지 조항, 원상복구 범위 불명확"
 출력 스타일:
-- 개선 포인트:
-  1) 문제 정의 -> 분석 -> 인사이트 -> 비즈니스 임팩트 흐름으로 재작성
-  2) SQL/Python 사용 범위와 자동화 범위 구체화
-  3) 지표 개선 수치(예: 전환율 12% 상승) 추가
+- 핵심 조항 진단:
+  1) 주택임대차보호법 제6조 위반 가능성: 일방 해지 요건 미충족
+  2) 원상복구 범위가 과도하게 광범위하게 설정됨
+  3) 보증금 반환 기한 미명시
 """.strip(),
-        "pm": """
+        "nda": """
 [Few-shot 예시]
 입력:
-- 목표 직무: PM
-- 이력서 요약: "요구사항 정리 및 일정 관리 경험 위주"
+- 계약서 유형: NDA
+- 계약서 요약: "비밀정보 정의 포괄적, 유효기간 영구"
 출력 스타일:
-- 개선 포인트:
-  1) 우선순위 판단 근거(KPI/리스크)를 명시
-  2) 이해관계자 조율 사례를 결과 중심으로 구조화
-  3) 실험/회고 기반 개선 루프를 수치와 함께 제시
+- 핵심 조항 진단:
+  1) 비밀정보 정의가 지나치게 광범위해 정상 사업 활동 제한 가능
+  2) 영구 유효기간은 계약법상 공서양속 위반 논란 가능
+  3) 공개예외 조항(법령상 공개) 누락
 """.strip(),
     }
 
-    interview_few_shot_defaults = {
-        "backend": """
+    risk_few_shot_defaults = {
+        "근로계약서": """
 [Few-shot 예시]
-입력: 백엔드 개발자 면접 준비
+입력: 근로계약서 위험 조항 검토
 출력 스타일:
-- 예상 질문: 대규모 트래픽 환경의 병목 해결 경험?
-- 답변 방향: 병목 식별 -> 대안 비교 -> 적용 결과 수치
-- 피해야 할 패턴: "그냥 캐시 썼다" 식의 근거 없는 답변
+- 위험 조항: 포괄임금제 + 경업금지 조항
+- 법적 우려: 연장근로수당 미지급, 직업선택 자유 침해
+- 대응 방향: 개별 수당 명시 또는 포괄임금제 동의서 별도 작성
 """.strip(),
-        "pm": """
+        "임대차계약서": """
 [Few-shot 예시]
-입력: PM 면접 준비
+입력: 임대차계약서 위험 조항 검토
 출력 스타일:
-- 예상 질문: 우선순위 충돌 상황 의사결정 사례?
-- 답변 방향: 목표 지표 -> 이해관계자 조율 -> 결과/회고
-- 피해야 할 패턴: 개인 의견만 강조하고 데이터/지표 근거 누락
+- 위험 조항: 임대인 일방 해지, 과도한 원상복구 범위
+- 법적 우려: 임차인의 주거 안정권 침해, 과도한 복구비용 청구
+- 대응 방향: 해지 조건을 법령 기준으로 한정, 원상복구 범위 명확화
 """.strip(),
-        "data": """
+        "nda": """
 [Few-shot 예시]
-입력: 데이터 분석가 면접 준비
+입력: NDA 위험 조항 검토
 출력 스타일:
-- 예상 질문: 분석 과제를 어떻게 문제정의부터 설계했는가?
-- 답변 방향: 가설 -> 데이터 수집/정제 -> 지표 설계 -> 결과 임팩트
-- 피해야 할 패턴: 도구 나열만 하고 비즈니스 연결이 없는 답변
+- 위험 조항: 포괄적 비밀정보 정의 + 무제한 손해배상
+- 법적 우려: 영업 자유 제한, 예측 불가능한 손해배상 리스크
+- 대응 방향: 비밀정보 범위 구체화, 손해배상 상한 설정
 """.strip(),
     }
 
     few_shot_dir = Path(__file__).resolve().parents[2] / "data" / "prompts" / "few_shots"
-    resume_few_shot_bank = _load_few_shot_bank(
-        agent_name="resume",
-        default_bank=resume_few_shot_defaults,
+    clause_few_shot_bank = _load_few_shot_bank(
+        agent_name="clause",
+        default_bank=clause_few_shot_defaults,
         base_dir=few_shot_dir,
     )
-    interview_few_shot_bank = _load_few_shot_bank(
-        agent_name="interview",
-        default_bank=interview_few_shot_defaults,
+    risk_few_shot_bank = _load_few_shot_bank(
+        agent_name="risk",
+        default_bank=risk_few_shot_defaults,
         base_dir=few_shot_dir,
     )
 
-    def _few_shot_key(target_role: str) -> str:
-        role = (target_role or "").lower()
-        if "백엔드" in role or "backend" in role:
-            return "backend"
-        if "데이터" in role or "data" in role:
-            return "data"
-        if "pm" in role or "기획" in role or "product" in role:
-            return "pm"
-        return "backend"
+    def _few_shot_key(document_type: str) -> str:
+        dtype = (document_type or "").lower()
+        if "임대" in dtype or "임차" in dtype or "전세" in dtype:
+            return "임대차계약서"
+        if "nda" in dtype or "비밀" in dtype or "기밀" in dtype:
+            return "nda"
+        return "근로계약서"
 
-    def _select_few_shots(bank: dict[str, str], target_role: str) -> str:
+    def _select_few_shots(bank: dict[str, str], document_type: str) -> str:
         max_examples = max(0, int(settings.few_shot_max_examples))
         if max_examples <= 0:
             return "없음 (운영 비용 제어를 위해 Few-shot 생략)"
-        primary = _few_shot_key(target_role)
+        primary = _few_shot_key(document_type)
         ordered = [primary, *[key for key in bank.keys() if key != primary]]
         selected: list[str] = []
         for key in ordered[:max_examples]:
@@ -964,14 +962,14 @@ def build_graph(retriever: HybridRetriever, memory: SessionMemory):
         assert last_error is not None
         raise last_error
 
-    def _format_resume_notes(notes: dict[str, Any]) -> str:
+    def _format_clause_notes(notes: dict[str, Any]) -> str:
         if not notes:
             return "없음"
         lines: list[str] = []
-        for item in notes.get("key_findings", []):
-            lines.append(f"- 핵심 진단: {item}")
-        for item in notes.get("improvement_points", []):
-            lines.append(f"- 개선 포인트: {item}")
+        for item in notes.get("key_clauses", []):
+            lines.append(f"- 핵심 조항 진단: {item}")
+        for item in notes.get("problematic_clauses", []):
+            lines.append(f"- 문제 조항: {item}")
         for item in notes.get("evidence_snippets", []):
             lines.append(f"- 근거: {item}")
         evidence_map = notes.get("evidence_map", {})
@@ -979,16 +977,16 @@ def build_graph(retriever: HybridRetriever, memory: SessionMemory):
             lines.append(f"- 근거 매핑: {evidence_map}")
         return "\n".join(lines) if lines else str(notes)
 
-    def _format_interview_notes(notes: dict[str, Any]) -> str:
+    def _format_risk_notes(notes: dict[str, Any]) -> str:
         if not notes:
             return "없음"
         lines: list[str] = []
-        for item in notes.get("expected_questions", []):
-            lines.append(f"- 예상 질문: {item}")
-        for item in notes.get("answer_guides", []):
-            lines.append(f"- 답변 방향: {item}")
-        for item in notes.get("avoid_patterns", []):
-            lines.append(f"- 피해야 할 패턴: {item}")
+        for item in notes.get("risk_areas", []):
+            lines.append(f"- 위험 조항: {item}")
+        for item in notes.get("legal_concerns", []):
+            lines.append(f"- 법적 우려: {item}")
+        for item in notes.get("mitigation_advice", []):
+            lines.append(f"- 대응 방향: {item}")
         for item in notes.get("evidence_snippets", []):
             lines.append(f"- 근거: {item}")
         evidence_map = notes.get("evidence_map", {})
@@ -996,14 +994,14 @@ def build_graph(retriever: HybridRetriever, memory: SessionMemory):
             lines.append(f"- 근거 매핑: {evidence_map}")
         return "\n".join(lines) if lines else str(notes)
 
-    def _format_plan_notes(notes: dict[str, Any]) -> str:
+    def _format_revision_notes(notes: dict[str, Any]) -> str:
         if not notes:
             return "없음"
         lines: list[str] = []
         for item in notes.get("priorities", []):
             lines.append(f"- 우선순위: {item}")
-        for item in notes.get("weekly_schedule", []):
-            lines.append(f"- 일정: {item}")
+        for item in notes.get("revision_steps", []):
+            lines.append(f"- 수정 단계: {item}")
         for item in notes.get("validation_checks", []):
             lines.append(f"- 검증: {item}")
         for item in notes.get("evidence_snippets", []):
@@ -1024,11 +1022,11 @@ def build_graph(retriever: HybridRetriever, memory: SessionMemory):
                 payloads.append(loaded)
         return payloads
 
-    def _resume_tool_reflected(notes: ResumeNotes, tool_outputs: list[str]) -> bool:
+    def _clause_tool_reflected(notes: ClauseNotes, tool_outputs: list[str]) -> bool:
         payloads = _extract_tool_payloads(tool_outputs)
         if not payloads:
             return True
-        merged_text = " ".join([*notes.key_findings, *notes.improvement_points]).lower()
+        merged_text = " ".join([*notes.key_clauses, *notes.problematic_clauses]).lower()
         checked = 0
         for payload in payloads:
             if str(payload.get("tool", "")).strip().lower() == "specialist_retrieve":
@@ -1054,24 +1052,24 @@ def build_graph(retriever: HybridRetriever, memory: SessionMemory):
                 return True
         return checked == 0
 
-    def _interview_tool_reflected(notes: InterviewNotes, tool_outputs: list[str]) -> bool:
+    def _risk_tool_reflected(notes: RiskNotes, tool_outputs: list[str]) -> bool:
         payloads = _extract_tool_payloads(tool_outputs)
         if not payloads:
             return True
-        merged_questions = " ".join(notes.expected_questions).lower()
+        merged_issues = " ".join(notes.risk_areas).lower()
         checked = 0
         for payload in payloads:
             if str(payload.get("tool", "")).strip().lower() == "specialist_retrieve":
                 continue
-            questions = payload.get("questions", [])
-            if not isinstance(questions, list):
+            issues = payload.get("issues", [])
+            if not isinstance(issues, list):
                 continue
             checked += 1
-            for question in questions:
-                q = str(question).strip().lower()
+            for issue in issues:
+                q = str(issue).strip().lower()
                 if not q:
                     continue
-                if q in merged_questions or q[:12] in merged_questions:
+                if q in merged_issues or q[:12] in merged_issues:
                     return True
         return checked == 0
 
@@ -1110,85 +1108,87 @@ def build_graph(retriever: HybridRetriever, memory: SessionMemory):
         )
         return snippets
 
-    def _fallback_resume_notes(state: AgentState, reason: str) -> dict[str, Any]:
-        normalized_reason = _normalize_fallback_reason(reason, ErrorCodes.STRUCTURED_OUTPUT_RESUME_FALLBACK)
+    def _fallback_clause_notes(state: AgentState, reason: str) -> dict[str, Any]:
+        normalized_reason = _normalize_fallback_reason(reason, ErrorCodes.STRUCTURED_OUTPUT_CLAUSE_FALLBACK)
         return {
-            "key_findings": _as_string_list(
+            "key_clauses": _as_string_list(
                 ["구조화 파싱 실패로 최소 진단 결과로 대체되었습니다.", normalized_reason],
-                fallback="구조화 파싱 실패로 기본 진단을 제공합니다.",
+                fallback="구조화 파싱 실패로 기본 조항 진단을 제공합니다.",
             ),
-            "improvement_points": _as_string_list(
+            "problematic_clauses": _as_string_list(
                 [
-                    "핵심 역량 3~5개를 상단 요약에 명시",
-                    "프로젝트를 문제-접근-결과 구조로 재작성",
-                    "정량 지표(성능/처리량/품질)를 문장에 포함",
-                    "목표 직무 공고 키워드와 일치율을 높이도록 수정",
+                    "임금·근로시간 등 핵심 조항의 법령 기준 부합 여부를 우선 확인",
+                    "일방적 불이익 조항(해지·원상복구·손해배상) 점검",
+                    "법령상 필수 기재사항 누락 여부 확인",
+                    "모호한 표현 및 해석 분쟁 가능성 조항 정리",
                 ],
-                fallback="JD 키워드와 핵심 역량 정합성을 우선 보강",
+                fallback="법령 기준과 핵심 조항 정합성을 우선 보강",
             ),
             "evidence_snippets": _fallback_rag_snippets(state, normalized_reason, max_items=2),
             "evidence_map": {},
         }
 
-    def _fallback_interview_notes(state: AgentState, reason: str) -> dict[str, Any]:
-        normalized_reason = _normalize_fallback_reason(reason, ErrorCodes.STRUCTURED_OUTPUT_INTERVIEW_FALLBACK)
+    def _fallback_risk_notes(state: AgentState, reason: str) -> dict[str, Any]:
+        normalized_reason = _normalize_fallback_reason(reason, ErrorCodes.STRUCTURED_OUTPUT_RISK_FALLBACK)
         return {
-            "expected_questions": _as_string_list(
+            "risk_areas": _as_string_list(
                 [
-                    "해당 직무에서 본인이 가장 잘한 문제 해결 사례는?",
-                    "프로젝트에서 성과를 수치로 설명할 수 있는가?",
-                    "협업 갈등 상황을 어떻게 해결했는가?",
-                    "우선순위 판단 기준은 무엇이었는가?",
+                    "포괄임금제·경업금지 등 근로자 불이익 조항",
+                    "일방적 계약 해지 조항",
+                    "과도한 손해배상·위약벌 조항",
+                    "비밀정보 범위 과도 설정",
                 ],
-                fallback="해당 직무 핵심 역량을 입증할 대표 사례는 무엇인가?",
+                fallback="일방에게 불이익한 핵심 위험 조항을 우선 탐지",
             ),
-            "answer_guides": _as_string_list(
+            "legal_concerns": _as_string_list(
                 [
-                    "상황-행동-결과 순서로 간결하게 답변",
-                    "수치/지표를 포함해 신뢰도를 높임",
-                    "본인 기여 범위를 명확히 구분",
-                    "회고와 재발 방지 관점까지 포함",
+                    "관련 법령(근로기준법·주택임대차보호법 등) 위반 가능성",
+                    "공서양속·신의칙 위반 소지",
+                    "계약 무효·취소 가능성",
+                    "분쟁 발생 시 불리한 증거 될 수 있는 조항",
                 ],
-                fallback="STAR 구조로 답변을 60~90초 내에 정리",
+                fallback="법령 위반 및 계약 분쟁 가능성을 우선 검토",
             ),
-            "avoid_patterns": _as_string_list(
+            "mitigation_advice": _as_string_list(
                 [
-                    "근거 없는 단정형 답변",
-                    "팀 성과를 본인 성과처럼 과장",
-                    "기술 나열만 하고 문제 맥락 누락",
-                    "질문 의도와 무관한 장황한 설명",
+                    "문제 조항별 대안 문구를 법령 기준에 맞게 작성",
+                    "상대방과 협의 가능한 항목 선별",
+                    "전문 법률가 검토 필요 항목 표시",
+                    "계약 체결 전 반드시 최종 확인",
                 ],
-                fallback="근거/맥락 없이 기술만 나열하는 답변",
+                fallback="위험 조항별 대안 문구 초안을 작성하고 전문가 검토를 받을 것",
             ),
             "evidence_snippets": _fallback_rag_snippets(state, normalized_reason, max_items=2),
             "evidence_map": {},
         }
 
-    def _fallback_plan_notes(state: AgentState, reason: str) -> dict[str, Any]:
-        normalized_reason = _normalize_fallback_reason(reason, ErrorCodes.STRUCTURED_OUTPUT_PLAN_FALLBACK)
+    def _fallback_revision_notes(state: AgentState, reason: str) -> dict[str, Any]:
+        normalized_reason = _normalize_fallback_reason(reason, ErrorCodes.STRUCTURED_OUTPUT_ADVICE_FALLBACK)
         return {
             "priorities": _as_string_list(
                 [
-                    "JD 핵심 역량과 현재 준비 상태의 격차가 큰 항목부터 우선 실행",
-                    "이력서/포트폴리오 고도화와 면접 리허설을 병행",
-                    "주 단위 산출물(문서/답변 스크립트) 중심으로 관리",
+                    "법령 위반 가능성이 높은 조항부터 우선 수정",
+                    "일방에게 불이익한 조항 대안 문구 작성",
+                    "누락된 필수 기재사항 추가",
                 ],
-                fallback="JD 요구역량 대비 격차가 큰 항목부터 우선 실행",
+                fallback="법령 기준 위반 조항부터 우선 수정",
             ),
-            "weekly_schedule": _as_string_list(
+            "revision_steps": _as_string_list(
                 [
-                    "1주차: JD 키워드 정렬, 이력서 핵심 불릿 재작성, 프로젝트 성과 수치 보강",
-                    "2주차: 예상 질문 답변 스크립트 완성, 모의 면접 2회, 피드백 반영",
+                    "1단계: 문제 조항 목록화 및 우선순위 설정",
+                    "2단계: 각 조항별 대안 문구 초안 작성",
+                    "3단계: 상대방과 협의 후 최종 문구 확정",
+                    "4단계: 전문 법률가 최종 검토 후 서명",
                 ],
-                fallback="1~2주차 실행 일정을 우선순위 기반으로 재구성",
+                fallback="조항별 수정 초안 → 협의 → 법률가 검토 순서로 진행",
             ),
             "validation_checks": _as_string_list(
                 [
-                    "이력서 항목별로 JD 요구역량 매칭 여부 체크",
-                    "모의 면접 후 약점 질문 재학습 여부 확인",
-                    "지원 전 체크리스트 완료율 점검",
+                    "수정 후 전체 조항의 법령 기준 부합 여부 재확인",
+                    "상대방 서명 전 최종 체크리스트 완료 여부 점검",
+                    "필수 기재사항 누락 없음 확인",
                 ],
-                fallback="주차별 산출물 완료율과 근거 반영 여부를 점검",
+                fallback="수정 완료 후 법령 기준 부합 여부를 재점검",
             ),
             "evidence_snippets": _fallback_rag_snippets(state, normalized_reason, max_items=2),
             "evidence_map": {},
@@ -1235,25 +1235,25 @@ def build_graph(retriever: HybridRetriever, memory: SessionMemory):
             )
         return {
             "summary": f"일부 구조화 단계 실패로 안전 모드 응답을 제공합니다. ({reason})",
-            "resume_improvements": [
-                "직무 키워드를 반영해 이력서 요약을 재작성",
-                "프로젝트 성과를 수치 중심으로 보강",
-                "기술 스택보다 문제 해결 흐름을 강조",
-                "JD와 불일치하는 표현을 정리",
+            "clause_analysis": [
+                "계약서 유형별 필수 기재사항 누락 여부 확인",
+                "임금·근로시간·보증금 등 핵심 조항의 법령 기준 부합 여부 점검",
+                "일방적 불이익 조항(해지·원상복구·손해배상) 확인",
+                "모호한 표현 및 해석 분쟁 가능성 조항 정리",
             ],
-            "interview_preparation": [
-                "직무 핵심 질문 10개를 선정해 답변 초안 작성",
-                "STAR 구조로 답변 리허설 진행",
-                "수치/지표 근거를 포함한 답변으로 보완",
-                "모의 면접 후 취약 질문 재학습",
+            "risk_findings": [
+                "포괄임금제·경업금지 등 일방에게 불이익한 조항 탐지",
+                "법령(근로기준법·주택임대차보호법 등) 위반 가능성 검토",
+                "계약 해지·무효 가능성이 있는 조항 점검",
+                "손해배상·위약벌 조항의 적정성 확인",
             ],
-            "two_week_plan": [
-                "1주차: 이력서 핵심 수정 및 공고 키워드 정렬",
-                "1주차: 프로젝트 사례 2개를 성과 중심으로 재정리",
-                "2주차: 면접 질문별 답변 스크립트 완성",
-                "2주차: 모의 면접 및 피드백 반영",
+            "revision_plan": [
+                "법령 위반 가능성이 높은 조항부터 우선 수정 초안 작성",
+                "일방에게 불이익한 조항 대안 문구 작성 후 상대방과 협의",
+                "누락된 필수 기재사항 추가 및 전문 법률가 검토 요청",
+                "수정 완료 후 전체 법령 기준 부합 여부 재확인",
             ],
-            "input_gap_notice": "일부 입력/근거 정보가 부족해 기본 실행 플랜을 제공합니다.",
+            "input_gap_notice": "일부 입력/근거 정보가 부족해 기본 계약 검토 가이드를 제공합니다.",
             "references": references,
         }
 
@@ -1262,15 +1262,15 @@ def build_graph(retriever: HybridRetriever, memory: SessionMemory):
         history_text = "\n".join(
             f"{m['role']}: {m['content']}" for m in state.get("memory_messages", [])
         ) or "없음"
-        resume_text = (state.get("resume_text") or "").strip()
-        jd_text = (state.get("jd_text") or "").strip()
+        contract_text = (state.get("contract_text") or "").strip()
+        reference_text = (state.get("reference_text") or "").strip()
         heuristic = heuristic_route_from_query(state.get("user_query", ""))
         if heuristic:
             route, reason = heuristic
-            if not resume_text and route == "resume_only":
-                route = "plan_only"
+            if not contract_text and route == "clause_only":
+                route = "advice_only"
                 reason = (
-                    f"{reason} / 이력서 텍스트가 없어 resume_only 대신 plan_only로 조정"
+                    f"{reason} / 계약서 원문이 없어 clause_only 대신 advice_only로 조정"
                 )
             return {"route": route, "routing_reason": reason}
         try:
@@ -1283,20 +1283,20 @@ def build_graph(retriever: HybridRetriever, memory: SessionMemory):
 [사용자 요청]
 {state['user_query']}
 
-[목표 직무]
-{state['target_role']}
+[계약서 유형]
+{state['document_type']}
 
-[JD/공고 텍스트 제공 여부]
-{"제공됨" if jd_text else "미제공"}
+[참조 법령/표준 계약서 제공 여부]
+{"제공됨" if reference_text else "미제공"}
 
-[JD/공고 텍스트 길이]
-{len(jd_text)}
+[참조 법령/표준 계약서 길이]
+{len(reference_text)}
 
-[이력서 텍스트 제공 여부]
-{"제공됨" if resume_text else "미제공"}
+[계약서 원문 제공 여부]
+{"제공됨" if contract_text else "미제공"}
 
-[이력서 텍스트 길이]
-{len(resume_text)}
+[계약서 원문 길이]
+{len(contract_text)}
 
 [최근 메모리]
 {history_text}
@@ -1306,14 +1306,14 @@ def build_graph(retriever: HybridRetriever, memory: SessionMemory):
             )
             route = decision.route
             reason = decision.reason
-            if not resume_text and route == "resume_only":
-                route = "plan_only"
+            if not contract_text and route == "clause_only":
+                route = "advice_only"
                 reason = (
-                    f"{reason} / 이력서 텍스트가 없어 resume_only 대신 plan_only로 조정"
+                    f"{reason} / 계약서 원문이 없어 clause_only 대신 advice_only로 조정"
                 )
             return {"route": route, "routing_reason": reason}
         except Exception:
-            return {"route": "full", "routing_reason": "파싱 실패로 full 라우트 기본 적용"}
+            return {"route": "full_review", "routing_reason": "파싱 실패로 full_review 라우트 기본 적용"}
 
     def supervisor_node(state: AgentState) -> AgentState:
         base_state: AgentState = {
@@ -1322,25 +1322,25 @@ def build_graph(retriever: HybridRetriever, memory: SessionMemory):
         base_state.update(_route_by_supervisor(base_state | state))
         return base_state
 
-    def _infer_role_hint(target_role: str) -> str:
-        role = target_role.lower()
-        if "백엔드" in target_role or "backend" in role:
-            return "backend, api, server, database"
-        if "데이터" in target_role or "data" in role:
-            return "data, sql, analytics, dashboard"
-        if "pm" in role or "기획" in target_role or "product" in role:
-            return "pm, product, roadmap, metric"
-        return target_role
+    def _infer_role_hint(document_type: str) -> str:
+        dtype = (document_type or "").lower()
+        if "임대" in dtype or "임차" in dtype or "전세" in dtype:
+            return "임대차, 보증금, 임대료, 주택임대차보호법"
+        if "nda" in dtype or "비밀" in dtype or "기밀" in dtype:
+            return "nda, 비밀정보, 기밀유지, 손해배상"
+        if "용역" in dtype or "도급" in dtype or "위탁" in dtype:
+            return "용역, 도급, 지적재산권, 납기, 하자보증"
+        return "근로계약, 임금, 근로시간, 근로기준법"
 
     def _category_filter_for_route(route: str) -> set[str] | None:
-        route_key = (route or "full").lower()
+        route_key = (route or "full_review").lower()
         fallback_category = {"uncategorized"} if settings.allow_uncategorized_in_filter else set()
-        if route_key == "resume_only":
-            return {"job_postings", "jd", "portfolio_examples", "resume_upload"} | fallback_category
-        if route_key == "interview_only":
-            return {"interview_guides", "job_postings", "jd"} | fallback_category
-        if route_key == "plan_only":
-            return {"job_postings", "jd", "interview_guides"} | fallback_category
+        if route_key == "clause_only":
+            return {"statutes", "standard_contracts", "contract_examples", "contract_upload"} | fallback_category
+        if route_key == "risk_only":
+            return {"case_guides", "statutes", "standard_contracts"} | fallback_category
+        if route_key == "advice_only":
+            return {"statutes", "standard_contracts", "case_guides"} | fallback_category
         return None
 
     def _chunk_inline_text(text: str, chunk_size: int = 500, chunk_overlap: int = 120) -> list[str]:
@@ -1371,10 +1371,10 @@ def build_graph(retriever: HybridRetriever, memory: SessionMemory):
 
     def _ephemeral_input_hits(
         query: str,
-        jd_text: str,
-        resume_text: str,
-        jd_base_score: float,
-        resume_base_score: float,
+        reference_text: str,
+        contract_text: str,
+        ref_base_score: float,
+        contract_base_score: float,
         overlap_weight: float,
         top_k: int = 2,
     ) -> list[SearchHit]:
@@ -1393,7 +1393,7 @@ def build_graph(retriever: HybridRetriever, memory: SessionMemory):
                         source=source,
                         score=score,
                         metadata={
-                            "category": "jd" if source_type == "jd_upload" else "resume_upload",
+                            "category": "standard_contracts" if source_type == "reference_upload" else "contract_upload",
                             "source_type": source_type,
                             "location": f"inline_chunk={idx}",
                             "chunk_id": start_chunk_id - idx,
@@ -1402,17 +1402,17 @@ def build_graph(retriever: HybridRetriever, memory: SessionMemory):
                 )
 
         _append_hits(
-            jd_text,
-            "uploaded_jd_text",
-            "jd_upload",
-            base_score=jd_base_score,
+            reference_text,
+            "uploaded_reference_text",
+            "reference_upload",
+            base_score=ref_base_score,
             start_chunk_id=-1000,
         )
         _append_hits(
-            resume_text,
-            "uploaded_resume_text",
-            "resume_upload",
-            base_score=resume_base_score,
+            contract_text,
+            "uploaded_contract_text",
+            "contract_upload",
+            base_score=contract_base_score,
             start_chunk_id=-2000,
         )
         ephemeral_hits.sort(key=lambda item: item.score, reverse=True)
@@ -1484,7 +1484,7 @@ def build_graph(retriever: HybridRetriever, memory: SessionMemory):
 
     def _specialist_local_recovery(
         state: AgentState,
-        specialist: Literal["resume", "interview", "plan"],
+        specialist: Literal["clause", "risk", "advice"],
     ) -> tuple[str, list[dict[str, Any]], bool]:
         base_context = str(state.get("rag_context", "") or "")
         base_refs = _normalize_reference_records(
@@ -1499,27 +1499,27 @@ def build_graph(retriever: HybridRetriever, memory: SessionMemory):
             if not settings.rerank_enabled
             else 0
         )
-        route = str(state.get("route", "full"))
+        route = str(state.get("route", "full_review"))
         route_categories = _category_filter_for_route(route)
-        role_hint = _infer_role_hint(state["target_role"])
+        role_hint = _infer_role_hint(state["document_type"])
         specialist_hint_map = {
-            "resume": "이력서 갭 분석 핵심역량",
-            "interview": "면접 질문 답변 전략",
-            "plan": "2주 실행계획 우선순위 및 검증",
+            "clause": "계약서 조항 분석 핵심 항목",
+            "risk": "위험 조항 탐지 법적 리스크",
+            "advice": "수정 계획 우선순위 및 검증",
         }
-        specialist_hint = specialist_hint_map.get(specialist, "핵심역량")
-        jd_text = (state.get("jd_text") or "").strip()
-        resume_text = (state.get("resume_text") or "").strip()
+        specialist_hint = specialist_hint_map.get(specialist, "계약 검토 핵심")
+        reference_text = (state.get("reference_text") or "").strip()
+        contract_text = (state.get("contract_text") or "").strip()
         query_candidates = [
-            f"{state['target_role']} {specialist_hint} {state['user_query']}",
-            f"{state['target_role']} {state['user_query']}",
+            f"{state['document_type']} {specialist_hint} {state['user_query']}",
+            f"{state['document_type']} {state['user_query']}",
         ]
-        if jd_text:
-            query_candidates.append(f"JD 요구역량 {jd_text[:220]}")
-        if specialist == "interview" and resume_text:
-            query_candidates.append(f"경험 기반 면접 포인트 {resume_text[:220]}")
-        if specialist == "plan":
-            query_candidates.append(f"실행 우선순위 일정 검증 {state['user_query']}")
+        if reference_text:
+            query_candidates.append(f"표준 계약 요건 {reference_text[:220]}")
+        if specialist == "risk" and contract_text:
+            query_candidates.append(f"계약서 위험 조항 탐지 {contract_text[:220]}")
+        if specialist == "advice":
+            query_candidates.append(f"수정 우선순위 단계별 검증 {state['user_query']}")
 
         merged_hits: dict[str, SearchHit] = {}
         for candidate in query_candidates[:3]:
@@ -1536,7 +1536,7 @@ def build_graph(retriever: HybridRetriever, memory: SessionMemory):
 
         ranked_hits = rerank_hits(
             hits=list(merged_hits.values()),
-            query=f"{state['target_role']} {state['user_query']}",
+            query=f"{state['document_type']} {state['user_query']}",
             role_hint=role_hint,
             route_categories=route_categories,
             top_k=3,
@@ -1582,12 +1582,12 @@ def build_graph(retriever: HybridRetriever, memory: SessionMemory):
 
     def _specialist_decision(
         state: AgentState,
-        specialist: Literal["resume", "interview", "plan"],
-        has_resume_text: bool,
-        jd_text: str,
+        specialist: Literal["clause", "risk", "advice"],
+        has_contract_text: bool,
+        reference_text: str,
     ) -> dict[str, Any]:
         fallback: dict[str, Any] = {
-            "need_tool_call": specialist in {"resume", "interview"} and has_resume_text,
+            "need_tool_call": specialist in {"clause", "risk"} and has_contract_text,
             "focus_areas": [],
             "omit_areas": [],
             "reason": "휴리스틱 기본 결정",
@@ -1601,15 +1601,15 @@ def build_graph(retriever: HybridRetriever, memory: SessionMemory):
 
 specialist={specialist}
 user_query={state['user_query']}
-target_role={state['target_role']}
-route={state.get('route', 'full')}
-has_resume_text={"yes" if has_resume_text else "no"}
-has_jd_text={"yes" if bool(jd_text) else "no"}
+document_type={state['document_type']}
+route={state.get('route', 'full_review')}
+has_contract_text={"yes" if has_contract_text else "no"}
+has_reference_text={"yes" if bool(reference_text) else "no"}
 rag_low_confidence={state.get('rag_low_confidence', False)}
 
 규칙:
-- resume/interview는 이력서 원문이 없으면 need_tool_call=false 우선.
-- plan은 기본적으로 need_tool_call=false를 우선하되, rag_low_confidence=true이면 true를 선택할 수 있다.
+- clause/risk는 계약서 원문이 없으면 need_tool_call=false 우선.
+- advice는 기본적으로 need_tool_call=false를 우선하되, rag_low_confidence=true이면 true를 선택할 수 있다.
 - focus_areas는 2~4개, omit_areas는 최대 3개.
 """
             )
@@ -1620,17 +1620,17 @@ rag_low_confidence={state.get('rag_low_confidence', False)}
     def rag_node(state: AgentState) -> AgentState:
         planner = rag_planner_llm.with_structured_output(RagPlan)
         settings = load_settings()
-        role_hint = _infer_role_hint(state["target_role"])
-        route = state.get("route", "full")
-        retrieval_top_k = 2 if route == "plan_only" else 4
-        query_limit = 2 if route == "plan_only" else 3
+        role_hint = _infer_role_hint(state["document_type"])
+        route = state.get("route", "full_review")
+        retrieval_top_k = 2 if route == "advice_only" else 4
+        query_limit = 2 if route == "advice_only" else 3
         retrieval_source_cap = (
             settings.retrieval_max_chunks_per_file
             if not settings.rerank_enabled
             else 0
         )
-        jd_text = (state.get("jd_text") or "").strip()
-        resume_text = (state.get("resume_text") or "").strip()
+        reference_text = (state.get("reference_text") or "").strip()
+        contract_text = (state.get("contract_text") or "").strip()
         category_filter = _category_filter_for_route(route)
         try:
             rag_plan = planner.invoke(
@@ -1638,16 +1638,16 @@ rag_low_confidence={state.get('rag_low_confidence', False)}
 너는 RAG Agent다. 검색 품질을 높이기 위해 쿼리를 2~3개로 재작성하라.
 route={route}
 user_query={state['user_query']}
-target_role={state['target_role']}
-jd_text_present={"yes" if jd_text else "no"}
-jd_text_preview={jd_text[:400] if jd_text else "none"}
-source_hint는 직무 연관 키워드로 짧게 작성하라.
+document_type={state['document_type']}
+reference_text_present={"yes" if reference_text else "no"}
+reference_text_preview={reference_text[:400] if reference_text else "none"}
+source_hint는 계약서 유형 연관 법령/키워드로 짧게 작성하라.
 """
             )
             query_candidates = [state["user_query"], *rag_plan.rewritten_queries]
             source_hint = rag_plan.source_hint or role_hint
         except Exception:
-            query_candidates = [state["user_query"], f"{state['target_role']} {state['user_query']}"]
+            query_candidates = [state["user_query"], f"{state['document_type']} {state['user_query']}"]
             source_hint = role_hint
 
         merged_hits: dict[str, SearchHit] = {}
@@ -1675,13 +1675,13 @@ source_hint는 직무 연관 키워드로 짧게 작성하라.
                 if not current or hit.score > current.score:
                     merged_hits[key] = hit
 
-        # Blend uploaded JD/Resume as ephemeral evidence to strengthen gap-analysis grounding.
+        # Blend uploaded reference/contract text as ephemeral evidence for gap-analysis grounding.
         for hit in _ephemeral_input_hits(
             query=state["user_query"],
-            jd_text=jd_text,
-            resume_text=resume_text,
-            jd_base_score=settings.ephemeral_jd_base_score,
-            resume_base_score=settings.ephemeral_resume_base_score,
+            reference_text=reference_text,
+            contract_text=contract_text,
+            ref_base_score=settings.ephemeral_ref_base_score,
+            contract_base_score=settings.ephemeral_contract_base_score,
             overlap_weight=settings.ephemeral_overlap_weight,
             top_k=2,
         ):
@@ -1704,7 +1704,7 @@ source_hint는 직무 연관 키워드로 짧게 작성하라.
         low_confidence = (not ranked_hits) or (top_score < settings.rag_evidence_score_threshold)
         if low_confidence:
             # Agent-local recovery policy: in low-confidence mode, broaden query/filter once.
-            recovery_query = f"{state['target_role']} 핵심역량 {state['user_query']}"
+            recovery_query = f"{state['document_type']} 핵심 조항 {state['user_query']}"
             recovery_hits = retriever.search(
                 recovery_query,
                 top_k=retrieval_top_k + 1,
@@ -1746,7 +1746,7 @@ source_hint는 직무 연관 키워드로 짧게 작성하라.
             )
 
         if not context_parts:
-            context_parts = ["검색 결과가 부족하여 일반적인 직무 가이드를 기반으로 응답합니다."]
+            context_parts = ["검색 결과가 부족하여 일반적인 법률 가이드를 기반으로 응답합니다."]
         if low_confidence:
             context_parts.append(
                 f"[rag-safety] 근거 점수가 임계치({settings.rag_evidence_score_threshold:.2f}) 미만이므로 "
@@ -1765,139 +1765,139 @@ source_hint는 직무 연관 키워드로 짧게 작성하라.
             "rag_low_confidence": low_confidence,
         }
 
-    def plan_node(state: AgentState) -> AgentState:
-        jd_text = (state.get("jd_text") or "").strip()
-        has_resume_text = bool((state.get("resume_text") or "").strip())
+    def advice_node(state: AgentState) -> AgentState:
+        reference_text = (state.get("reference_text") or "").strip()
+        has_contract_text = bool((state.get("contract_text") or "").strip())
         specialist_rag_context, specialist_rag_refs, specialist_low_confidence = _specialist_local_recovery(
             state,
-            "plan",
+            "advice",
         )
         specialist_decision = _specialist_decision(
             state=state,
-            specialist="plan",
-            has_resume_text=has_resume_text,
-            jd_text=jd_text,
+            specialist="advice",
+            has_contract_text=has_contract_text,
+            reference_text=reference_text,
         )
-        resume_notes = _format_resume_notes(state.get("resume_notes", {}))
-        interview_notes = _format_interview_notes(state.get("interview_notes", {}))
+        clause_notes = _format_clause_notes(state.get("clause_notes", {}))
+        risk_notes = _format_risk_notes(state.get("risk_notes", {}))
         try:
             structured, _ = _run_tool_loop_structured_with_trace(
                 prompt=f"""
-당신은 Plan Agent입니다.
+당신은 Revision Advisor Agent입니다.
 {build_common_policy_block(include_plan_citation=True)}
 
 [사용자 요청]
 {state['user_query']}
 
-[목표 직무]
-{state['target_role']}
+[계약서 유형]
+{state['document_type']}
 
 [Supervisor route]
-{state.get('route', 'full')}
+{state.get('route', 'full_review')}
 
-[JD/공고 텍스트]
-{jd_text or '미제공'}
+[참조 법령/표준 계약서]
+{reference_text or '미제공'}
 
-[Resume Agent 결과]
-{resume_notes if state.get('resume_notes') else '이번 라우트에서는 Resume Agent를 생략했습니다.'}
+[Clause Analyzer 결과]
+{clause_notes if state.get('clause_notes') else '이번 라우트에서는 Clause Analyzer를 생략했습니다.'}
 
-[Interview Agent 결과]
-{interview_notes if state.get('interview_notes') else '이번 라우트에서는 Interview Agent를 생략했습니다.'}
+[Risk Detection 결과]
+{risk_notes if state.get('risk_notes') else '이번 라우트에서는 Risk Detection을 생략했습니다.'}
 
 [RAG 근거]
 {specialist_rag_context}
 
-[Plan Agent 의사결정]
+[Revision Advisor 의사결정]
 {json.dumps(specialist_decision, ensure_ascii=False)}
 
 요구사항:
-- priorities, weekly_schedule, validation_checks를 균형 있게 작성
-- evidence_map 필수: key는 계획 항목, value는 근거 번호 목록(예: [1,2])
+- priorities, revision_steps, validation_checks를 균형 있게 작성
+- evidence_map 필수: key는 수정 항목, value는 근거 번호 목록(예: [1,2])
 - 근거가 부족하거나 모호하면 specialist_retrieve 도구를 호출해 추가 근거를 확보하세요.
 """,
                 tools=[specialist_retrieve],
-                output_schema=PlanNotes,
+                output_schema=RevisionNotes,
                 model_temperature=0.15,
-                system_prompt=plan_system_prompt,
+                system_prompt=advice_system_prompt,
             )
             payload = _sanitize_notes_evidence_map(
                 structured.model_dump(),
                 max_ref=len(specialist_rag_refs),
             )
             return {
-                "plan_notes": payload,
+                "revision_notes": payload,
                 "rag_context": specialist_rag_context,
                 "rag_refs": specialist_rag_refs,
                 "rag_low_confidence": specialist_low_confidence,
             }
         except Exception as exc:
             return {
-                "plan_notes": _fallback_plan_notes(
-                    state, f"{ErrorCodes.STRUCTURED_OUTPUT_PLAN_FALLBACK}: {exc}"
+                "revision_notes": _fallback_revision_notes(
+                    state, f"{ErrorCodes.STRUCTURED_OUTPUT_ADVICE_FALLBACK}: {exc}"
                 )
             }
 
-    def resume_node(state: AgentState) -> AgentState:
-        has_resume_text = bool((state.get("resume_text") or "").strip())
-        jd_text = (state.get("jd_text") or "").strip()
+    def clause_node(state: AgentState) -> AgentState:
+        has_contract_text = bool((state.get("contract_text") or "").strip())
+        reference_text = (state.get("reference_text") or "").strip()
         specialist_decision = _specialist_decision(
             state=state,
-            specialist="resume",
-            has_resume_text=has_resume_text,
-            jd_text=jd_text,
+            specialist="clause",
+            has_contract_text=has_contract_text,
+            reference_text=reference_text,
         )
         specialist_rag_context, specialist_rag_refs, specialist_low_confidence = _specialist_local_recovery(
             state,
-            "resume",
+            "clause",
         )
         prompt = f"""
-당신은 Resume Agent입니다.
+당신은 Clause Analyzer Agent입니다.
 {build_common_policy_block()}
-목표 직무: {state['target_role']}
+계약서 유형: {state['document_type']}
 사용자 요청: {state['user_query']}
-JD/공고 텍스트:
-{jd_text or 'JD/공고 텍스트가 제공되지 않았습니다.'}
-사용자 이력서:
-{state['resume_text'] or '이력서 텍스트가 제공되지 않았습니다.'}
+참조 법령/표준 계약서:
+{reference_text or '참조 텍스트가 제공되지 않았습니다.'}
+계약서 원문:
+{state['contract_text'] or '계약서 원문이 제공되지 않았습니다.'}
 
 RAG 근거:
 {specialist_rag_context}
 
-[Resume Agent 의사결정]
+[Clause Analyzer 의사결정]
 {json.dumps(specialist_decision, ensure_ascii=False)}
 
 지시:
-1) resume_keyword_match_score 도구를 활용해 키워드 적합도를 반영하세요.
-1-1) JD/공고 텍스트가 있으면 jd_resume_gap_score 도구로 필수/우대 매칭률과 누락 역량 top-N을 반영하세요.
+1) clause_keyword_match_score 도구를 활용해 필수 조항 커버리지를 반영하세요.
+1-1) 참조 텍스트가 있으면 contract_reference_gap_score 도구로 필수/우대 조항 매칭률과 누락 항목 top-N을 반영하세요.
 2) 도구 호출이 필요 없다고 판단되면 즉시 최종 결과를 작성하세요.
 3) 아래 Few-shot 스타일을 참고해 동일한 형식으로 작성하세요.
 4) 근거 문장/출처 기반으로만 작성하고, 근거 없는 단정은 금지합니다.
-5) 최종 출력은 반드시 ResumeNotes 스키마를 따르세요.
-6) 로컬 정책: 이력서 텍스트가 없으면 개인 문장 교정보다 "직무-이력서 갭 분석 및 보강 체크리스트" 중심으로 작성하세요.
-7) JD/공고 텍스트가 있으면 JD 요구역량과 이력서 간 갭을 항목별로 명시적으로 비교하세요.
-8) evidence_map 필수: key는 개선/진단 문장, value는 관련 근거 번호 목록(예: [1,2])입니다.
-9) 도구를 호출했다면 도구 결과(JSON)의 score/keywords/missing_required_top을 최소 1회 이상 key_findings 또는 improvement_points에 반영하세요.
+5) 최종 출력은 반드시 ClauseNotes 스키마를 따르세요.
+6) 로컬 정책: 계약서 원문이 없으면 개별 조항 교정보다 "계약서 유형별 필수 조항 체크리스트" 중심으로 작성하세요.
+7) 참조 텍스트가 있으면 참조 요건과 계약서 간 갭을 항목별로 명시적으로 비교하세요.
+8) evidence_map 필수: key는 조항/진단 문장, value는 관련 근거 번호 목록(예: [1,2])입니다.
+9) 도구를 호출했다면 도구 결과(JSON)의 score/keywords/missing_required_top을 최소 1회 이상 key_clauses 또는 problematic_clauses에 반영하세요.
 10) 근거가 부족하거나 모호하면 specialist_retrieve 도구로 추가 검색을 수행하세요.
 
 [Few-shot]
-{_select_few_shots(resume_few_shot_bank, state['target_role'])}
+{_select_few_shots(clause_few_shot_bank, state['document_type'])}
 """
         try:
-            if not has_resume_text:
+            if not has_contract_text:
                 structured = _invoke_structured_with_repair(
                     prompt=f"""
-이력서 원문이 없는 상황입니다.
-아래 조건을 반영해 ResumeNotes를 작성하세요.
-- 개인 경력 단정 금지
-- 직무 공고 기준 갭 분석/보강 우선순위 제시
+계약서 원문이 없는 상황입니다.
+아래 조건을 반영해 ClauseNotes를 작성하세요.
+- 개별 계약 단정 금지
+- 계약서 유형 기준 필수 조항 체크리스트/갭 분석 우선 제시
 - 한국어로만 작성
-- evidence_map 필수: 각 개선항목을 근거 번호([1],[2]...)와 매핑
+- evidence_map 필수: 각 조항 항목을 근거 번호([1],[2]...)와 매핑
 
-[목표 직무]
-{state['target_role']}
+[계약서 유형]
+{state['document_type']}
 
-[JD/공고 텍스트]
-{jd_text or '없음'}
+[참조 법령/표준 계약서]
+{reference_text or '없음'}
 
 [사용자 요청]
 {state['user_query']}
@@ -1905,14 +1905,14 @@ RAG 근거:
 [RAG 근거]
 {specialist_rag_context}
 """,
-                    schema=ResumeNotes,
+                    schema=ClauseNotes,
                     base_temperature=0.1,
                 )
             else:
                 if not bool(specialist_decision.get("need_tool_call", True)):
                     structured = _invoke_structured_with_repair(
                         prompt=f"{prompt}\n\n[로컬 정책]\n이번 요청은 도구 호출 없이 직접 분석 결과를 작성하세요.",
-                        schema=ResumeNotes,
+                        schema=ClauseNotes,
                         base_temperature=0.1,
                     )
                     payload = _sanitize_notes_evidence_map(
@@ -1920,108 +1920,108 @@ RAG 근거:
                         max_ref=len(specialist_rag_refs),
                     )
                     return {
-                        "resume_notes": payload,
+                        "clause_notes": payload,
                         "rag_context": specialist_rag_context,
                         "rag_refs": specialist_rag_refs,
                         "rag_low_confidence": specialist_low_confidence,
                     }
                 structured, tool_outputs = _run_tool_loop_structured_with_trace(
                     prompt=prompt,
-                    tools=[resume_keyword_match_score, jd_resume_gap_score, specialist_retrieve],
-                    output_schema=ResumeNotes,
+                    tools=[clause_keyword_match_score, contract_reference_gap_score, specialist_retrieve],
+                    output_schema=ClauseNotes,
                     model_temperature=0.15,
-                    system_prompt=resume_system_prompt,
+                    system_prompt=clause_system_prompt,
                 )
-                if tool_outputs and (not _resume_tool_reflected(structured, tool_outputs)):
+                if tool_outputs and (not _clause_tool_reflected(structured, tool_outputs)):
                     retry_prompt = (
                         f"{prompt}\n\n"
                         "[검증 피드백]\n"
                         "직전 결과에서 도구 결과 반영이 명확히 감지되지 않았습니다.\n"
                         f"도구 결과 요약: {_tool_outputs_preview(tool_outputs)}\n"
-                        "반드시 도구 결과의 score/keywords를 key_findings 또는 improvement_points에 최소 1회 포함하세요."
+                        "반드시 도구 결과의 score/keywords를 key_clauses 또는 problematic_clauses에 최소 1회 포함하세요."
                     )
                     structured, _ = _run_tool_loop_structured_with_trace(
                         prompt=retry_prompt,
-                        tools=[resume_keyword_match_score, jd_resume_gap_score, specialist_retrieve],
-                        output_schema=ResumeNotes,
+                        tools=[clause_keyword_match_score, contract_reference_gap_score, specialist_retrieve],
+                        output_schema=ClauseNotes,
                         model_temperature=0.15,
-                        system_prompt=resume_system_prompt,
+                        system_prompt=clause_system_prompt,
                     )
             payload = _sanitize_notes_evidence_map(
                 structured.model_dump(),
                 max_ref=len(specialist_rag_refs),
             )
             return {
-                "resume_notes": payload,
+                "clause_notes": payload,
                 "rag_context": specialist_rag_context,
                 "rag_refs": specialist_rag_refs,
                 "rag_low_confidence": specialist_low_confidence,
             }
         except Exception as exc:
             return {
-                "resume_notes": _fallback_resume_notes(
-                    state, f"{ErrorCodes.STRUCTURED_OUTPUT_RESUME_FALLBACK}: {exc}"
+                "clause_notes": _fallback_clause_notes(
+                    state, f"{ErrorCodes.STRUCTURED_OUTPUT_CLAUSE_FALLBACK}: {exc}"
                 )
             }
 
-    def interview_node(state: AgentState) -> AgentState:
-        has_resume_text = bool((state.get("resume_text") or "").strip())
-        jd_text = (state.get("jd_text") or "").strip()
+    def risk_node(state: AgentState) -> AgentState:
+        has_contract_text = bool((state.get("contract_text") or "").strip())
+        reference_text = (state.get("reference_text") or "").strip()
         specialist_decision = _specialist_decision(
             state=state,
-            specialist="interview",
-            has_resume_text=has_resume_text,
-            jd_text=jd_text,
+            specialist="risk",
+            has_contract_text=has_contract_text,
+            reference_text=reference_text,
         )
         specialist_rag_context, specialist_rag_refs, specialist_low_confidence = _specialist_local_recovery(
             state,
-            "interview",
+            "risk",
         )
         prompt = f"""
-당신은 Interview Agent입니다.
+당신은 Risk Detection Agent입니다.
 {build_common_policy_block()}
-목표 직무: {state['target_role']}
+계약서 유형: {state['document_type']}
 사용자 요청: {state['user_query']}
-JD/공고 텍스트:
-{jd_text or 'JD/공고 텍스트가 제공되지 않았습니다.'}
+참조 법령/표준 계약서:
+{reference_text or '참조 텍스트가 제공되지 않았습니다.'}
 
 RAG 근거:
 {specialist_rag_context}
 
-[Interview Agent 의사결정]
+[Risk Detection 의사결정]
 {json.dumps(specialist_decision, ensure_ascii=False)}
 
 지시:
-1) interview_question_bank 도구를 활용해 질문 세트를 참고하세요.
+1) legal_issue_bank 도구를 활용해 유형별 주요 법적 이슈 세트를 참고하세요.
 2) 도구 호출이 필요 없다고 판단되면 즉시 최종 결과를 작성하세요.
 3) 아래 Few-shot 스타일을 참고해 동일한 형식으로 작성하세요.
 4) 근거 문장/출처 기반으로만 작성하고, 근거 없는 단정은 금지합니다.
-5) 최종 출력은 반드시 InterviewNotes 스키마를 따르세요.
-6) 로컬 정책: 이력서 텍스트가 없으면 개인 경험 단정 대신 직무 공통 질문/답변 프레임워크 중심으로 작성하세요.
-7) JD/공고 텍스트가 있으면 JD 요구역량을 기준으로 질문 우선순위를 조정하세요.
-8) evidence_map 필수: key는 질문/답변 문장, value는 관련 근거 번호 목록(예: [1,2])입니다.
-9) 도구를 호출했다면 도구 결과(JSON)의 questions를 최소 1회 이상 expected_questions에 반영하세요.
+5) 최종 출력은 반드시 RiskNotes 스키마를 따르세요.
+6) 로컬 정책: 계약서 원문이 없으면 개별 조항 단정 대신 계약서 유형별 공통 위험 패턴/대응 프레임워크 중심으로 작성하세요.
+7) 참조 텍스트가 있으면 참조 요건을 기준으로 위험 우선순위를 조정하세요.
+8) evidence_map 필수: key는 위험/우려 문장, value는 관련 근거 번호 목록(예: [1,2])입니다.
+9) 도구를 호출했다면 도구 결과(JSON)의 issues를 최소 1회 이상 risk_areas에 반영하세요.
 10) 근거가 부족하거나 모호하면 specialist_retrieve 도구로 추가 검색을 수행하세요.
 
 [Few-shot]
-{_select_few_shots(interview_few_shot_bank, state['target_role'])}
+{_select_few_shots(risk_few_shot_bank, state['document_type'])}
 """
         try:
-            if not has_resume_text:
+            if not has_contract_text:
                 structured = _invoke_structured_with_repair(
                     prompt=f"""
-이력서 원문이 없는 상황입니다.
-아래 조건을 반영해 InterviewNotes를 작성하세요.
-- 개인 이력 단정 금지
-- 직무 공통 질문, 답변 프레임워크, 금지 패턴을 우선 제시
+계약서 원문이 없는 상황입니다.
+아래 조건을 반영해 RiskNotes를 작성하세요.
+- 개별 계약 단정 금지
+- 계약서 유형 공통 위험 패턴, 법적 우려, 대응 방향을 우선 제시
 - 한국어로만 작성
-- evidence_map 필수: 각 질문/답변 항목을 근거 번호([1],[2]...)와 매핑
+- evidence_map 필수: 각 위험/우려 항목을 근거 번호([1],[2]...)와 매핑
 
-[목표 직무]
-{state['target_role']}
+[계약서 유형]
+{state['document_type']}
 
-[JD/공고 텍스트]
-{jd_text or '없음'}
+[참조 법령/표준 계약서]
+{reference_text or '없음'}
 
 [사용자 요청]
 {state['user_query']}
@@ -2029,14 +2029,14 @@ RAG 근거:
 [RAG 근거]
 {specialist_rag_context}
 """,
-                    schema=InterviewNotes,
+                    schema=RiskNotes,
                     base_temperature=0.2,
                 )
             else:
                 if not bool(specialist_decision.get("need_tool_call", True)):
                     structured = _invoke_structured_with_repair(
                         prompt=f"{prompt}\n\n[로컬 정책]\n이번 요청은 도구 호출 없이 직접 분석 결과를 작성하세요.",
-                        schema=InterviewNotes,
+                        schema=RiskNotes,
                         base_temperature=0.2,
                     )
                     payload = _sanitize_notes_evidence_map(
@@ -2044,72 +2044,72 @@ RAG 근거:
                         max_ref=len(specialist_rag_refs),
                     )
                     return {
-                        "interview_notes": payload,
+                        "risk_notes": payload,
                         "rag_context": specialist_rag_context,
                         "rag_refs": specialist_rag_refs,
                         "rag_low_confidence": specialist_low_confidence,
                     }
                 structured, tool_outputs = _run_tool_loop_structured_with_trace(
                     prompt=prompt,
-                    tools=[interview_question_bank, specialist_retrieve],
-                    output_schema=InterviewNotes,
+                    tools=[legal_issue_bank, specialist_retrieve],
+                    output_schema=RiskNotes,
                     model_temperature=0.25,
-                    system_prompt=interview_system_prompt,
+                    system_prompt=risk_system_prompt,
                 )
-                if tool_outputs and (not _interview_tool_reflected(structured, tool_outputs)):
+                if tool_outputs and (not _risk_tool_reflected(structured, tool_outputs)):
                     retry_prompt = (
                         f"{prompt}\n\n"
                         "[검증 피드백]\n"
                         "직전 결과에서 도구 결과 반영이 명확히 감지되지 않았습니다.\n"
                         f"도구 결과 요약: {_tool_outputs_preview(tool_outputs)}\n"
-                        "반드시 도구 결과의 questions 중 최소 1개를 expected_questions에 반영하세요."
+                        "반드시 도구 결과의 issues 중 최소 1개를 risk_areas에 반영하세요."
                     )
                     structured, _ = _run_tool_loop_structured_with_trace(
                         prompt=retry_prompt,
-                        tools=[interview_question_bank, specialist_retrieve],
-                        output_schema=InterviewNotes,
+                        tools=[legal_issue_bank, specialist_retrieve],
+                        output_schema=RiskNotes,
                         model_temperature=0.25,
-                        system_prompt=interview_system_prompt,
+                        system_prompt=risk_system_prompt,
                     )
             payload = _sanitize_notes_evidence_map(
                 structured.model_dump(),
                 max_ref=len(specialist_rag_refs),
             )
             return {
-                "interview_notes": payload,
+                "risk_notes": payload,
                 "rag_context": specialist_rag_context,
                 "rag_refs": specialist_rag_refs,
                 "rag_low_confidence": specialist_low_confidence,
             }
         except Exception as exc:
             return {
-                "interview_notes": _fallback_interview_notes(
-                    state, f"{ErrorCodes.STRUCTURED_OUTPUT_INTERVIEW_FALLBACK}: {exc}"
+                "risk_notes": _fallback_risk_notes(
+                    state, f"{ErrorCodes.STRUCTURED_OUTPUT_RISK_FALLBACK}: {exc}"
                 )
             }
 
     def synthesis_node(state: AgentState) -> AgentState:
-        route = state.get("route", "full")
+        route = state.get("route", "full_review")
         history_text = "\n".join(
             f"{m['role']}: {m['content']}" for m in state.get("memory_messages", [])
         )
-        resume_notes = (
-            _format_resume_notes(state.get("resume_notes", {}))
-            if state.get("resume_notes")
-            else "이번 라우트에서는 Resume Agent를 생략했습니다."
+        clause_notes = (
+            _format_clause_notes(state.get("clause_notes", {}))
+            if state.get("clause_notes")
+            else "이번 라우트에서는 Clause Analyzer를 생략했습니다."
         )
-        interview_notes = (
-            _format_interview_notes(state.get("interview_notes", {}))
-            if state.get("interview_notes")
-            else "이번 라우트에서는 Interview Agent를 생략했습니다."
+        risk_notes = (
+            _format_risk_notes(state.get("risk_notes", {}))
+            if state.get("risk_notes")
+            else "이번 라우트에서는 Risk Detection을 생략했습니다."
         )
-        plan_notes = (
-            _format_plan_notes(state.get("plan_notes", {}))
-            if state.get("plan_notes")
-            else "이번 라우트에서는 Plan Agent를 생략했습니다."
+        revision_notes = (
+            _format_revision_notes(state.get("revision_notes", {}))
+            if state.get("revision_notes")
+            else "이번 라우트에서는 Revision Advisor를 생략했습니다."
         )
         synthesis_prompt = f"""
-당신은 JobPilot AI의 Supervisor입니다.
+당신은 LegalPilot AI의 Supervisor입니다.
 아래 정보를 통합하여 반드시 JSON 스키마에 맞는 결과를 생성하세요.
 {PROMPT_RULE_RESULT_ONLY}
 {PROMPT_RULE_ALL_FIELDS_KOREAN}
@@ -2117,11 +2117,11 @@ RAG 근거:
 [사용자 요청]
 {state['user_query']}
 
-[목표 직무]
-{state['target_role']}
+[계약서 유형]
+{state['document_type']}
 
-[JD/공고 텍스트]
-{state.get('jd_text', '') or '미제공'}
+[참조 법령/표준 계약서]
+{state.get('reference_text', '') or '미제공'}
 
 [최근 대화 메모리]
 {history_text or '없음'}
@@ -2130,14 +2130,14 @@ RAG 근거:
 - route: {route}
 - reason: {state.get('routing_reason', '기본 라우트')}
 
-[Resume Agent 결과]
-{resume_notes}
+[Clause Analyzer 결과]
+{clause_notes}
 
-[Interview Agent 결과]
-{interview_notes}
+[Risk Detection 결과]
+{risk_notes}
 
-[Plan Agent 결과]
-{plan_notes}
+[Revision Advisor 결과]
+{revision_notes}
 
 [RAG 근거]
 {state.get('rag_context', 'RAG 단계를 생략했습니다.')}
@@ -2150,15 +2150,15 @@ RAG 근거:
 
 [필수 규칙]
 - summary는 4문장 이내.
-- plan_only에서도 summary는 1~2문장으로 반드시 작성.
-- route가 full 또는 plan_only인 경우 Plan Agent 결과를 우선 반영해 two_week_plan 작성.
+- advice_only에서도 summary는 1~2문장으로 반드시 작성.
+- route가 full_review 또는 advice_only인 경우 Revision Advisor 결과를 우선 반영해 revision_plan 작성.
 - references는 임의 생성하지 말고 비워두거나 제공된 구조를 유지하세요(후처리에서 rag_refs 기준으로 정규화).
 - references가 있을 때만 액션 불릿에 유효 citation(`[1]`~`[{len(state.get("rag_refs", []) or [])}]`)을 표기하고, references가 비어 있으면 citation을 생략하세요.
 - 책임 한계 고지 템플릿을 summary에 포함:
-  "법/세무/노무 등 비전문 영역은 별도 확인이 필요하며 최신 공고/회사 정책은 반드시 원문 확인이 필요합니다."
+  "본 검토 의견은 법률 자문이 아니며, 실제 계약 체결 전 반드시 전문 법률가의 확인이 필요합니다."
 
 [권장 규칙]
-- input_gap_notice는 필요한 경우에만 짧게 작성하고, two_week_plan에는 실행형 액션만 포함하세요.
+- input_gap_notice는 필요한 경우에만 짧게 작성하고, revision_plan에는 구체적 수정 액션만 포함하세요.
 - route별 최소 개수/빈 배열 정책은 후처리에서 강제되므로 우선 의미 일관성에 집중.
 """
         try:
@@ -2197,36 +2197,33 @@ RAG 근거:
             return {"final_answer": normalized}
 
     def route_after_supervisor(state: AgentState) -> str:
-        route = state.get("route", "full")
-        if route in {"full", "resume_only", "interview_only", "plan_only"}:
-            return "rag"
         return "rag"
 
     def route_after_rag(state: AgentState) -> str:
-        route = state.get("route", "full")
-        if route in {"full", "resume_only"}:
-            return "resume"
-        if route == "interview_only":
-            return "interview"
-        if route == "plan_only":
-            return "plan"
+        route = state.get("route", "full_review")
+        if route in {"full_review", "clause_only"}:
+            return "clause"
+        if route == "risk_only":
+            return "risk"
+        if route == "advice_only":
+            return "advice"
         return "synthesis"
 
-    def route_after_resume(state: AgentState) -> str:
-        return "interview" if state.get("route", "full") == "full" else "synthesis"
+    def route_after_clause(state: AgentState) -> str:
+        return "risk" if state.get("route", "full_review") == "full_review" else "synthesis"
 
-    def route_after_interview(state: AgentState) -> str:
-        return "plan" if state.get("route", "full") == "full" else "synthesis"
+    def route_after_risk(state: AgentState) -> str:
+        return "advice" if state.get("route", "full_review") == "full_review" else "synthesis"
 
-    def route_after_plan(state: AgentState) -> str:
+    def route_after_advice(state: AgentState) -> str:
         return "synthesis"
 
     graph = StateGraph(AgentState)
     graph.add_node("supervisor", supervisor_node)
     graph.add_node("rag", rag_node)
-    graph.add_node("resume", resume_node)
-    graph.add_node("interview", interview_node)
-    graph.add_node("plan", plan_node)
+    graph.add_node("clause", clause_node)
+    graph.add_node("risk", risk_node)
+    graph.add_node("advice", advice_node)
     graph.add_node("synthesis", synthesis_node)
 
     graph.set_entry_point("supervisor")
@@ -2238,21 +2235,21 @@ RAG 근거:
     graph.add_conditional_edges(
         "rag",
         route_after_rag,
-        {"resume": "resume", "interview": "interview", "plan": "plan", "synthesis": "synthesis"},
+        {"clause": "clause", "risk": "risk", "advice": "advice", "synthesis": "synthesis"},
     )
     graph.add_conditional_edges(
-        "resume",
-        route_after_resume,
-        {"interview": "interview", "synthesis": "synthesis"},
+        "clause",
+        route_after_clause,
+        {"risk": "risk", "synthesis": "synthesis"},
     )
     graph.add_conditional_edges(
-        "interview",
-        route_after_interview,
-        {"plan": "plan", "synthesis": "synthesis"},
+        "risk",
+        route_after_risk,
+        {"advice": "advice", "synthesis": "synthesis"},
     )
     graph.add_conditional_edges(
-        "plan",
-        route_after_plan,
+        "advice",
+        route_after_advice,
         {"synthesis": "synthesis"},
     )
     graph.add_edge("synthesis", END)
@@ -2262,7 +2259,7 @@ RAG 근거:
     return graph.compile(checkpointer=checkpointer)
 
 
-class JobPilotService:
+class LegalPilotService:
     """High-level service that owns retriever, workflow and memory."""
 
     def __init__(self) -> None:
@@ -2297,9 +2294,9 @@ class JobPilotService:
             [
                 req.session_id,
                 req.user_query,
-                req.target_role,
-                req.resume_text,
-                req.jd_text,
+                req.document_type,
+                req.contract_text,
+                req.reference_text,
             ]
         )
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
@@ -2358,9 +2355,9 @@ class JobPilotService:
         payload = enforce_chat_response_contract(
             {
             "summary": result.get("final_answer", {}).get("summary", ""),
-            "resume_improvements": result.get("final_answer", {}).get("resume_improvements", []),
-            "interview_preparation": result.get("final_answer", {}).get("interview_preparation", []),
-            "two_week_plan": result.get("final_answer", {}).get("two_week_plan", []),
+            "clause_analysis": result.get("final_answer", {}).get("clause_analysis", []),
+            "risk_findings": result.get("final_answer", {}).get("risk_findings", []),
+            "revision_plan": result.get("final_answer", {}).get("revision_plan", []),
             "input_gap_notice": result.get("final_answer", {}).get("input_gap_notice"),
             "references": _normalize_reference_records(
                 result.get("final_answer", {}).get("references", [])
@@ -2402,16 +2399,16 @@ class JobPilotService:
             state: AgentState = {
                 "session_id": req.session_id,
                 "user_query": req.user_query,
-                "target_role": req.target_role,
-                "resume_text": req.resume_text,
-                "jd_text": req.jd_text,
+                "document_type": req.document_type,
+                "contract_text": req.contract_text,
+                "reference_text": req.reference_text,
             }
             result = self.graph.invoke(
                 state,
                 config={"configurable": {"thread_id": req.session_id}},
             )
             if not isinstance(result, dict) or "final_answer" not in result:
-                raise JobPilotError(
+                raise LegalPilotError(
                     error_code=ErrorCodes.STRUCTURED_OUTPUT_CONTRACT_ERROR,
                     detail="Missing final_answer in graph result.",
                     status_code=500,
@@ -2436,11 +2433,11 @@ class JobPilotService:
 
             self.memory.add(req.session_id, "assistant", response.summary)
             return response
-        except JobPilotError:
+        except LegalPilotError:
             raise
         except Exception as exc:
-            raise JobPilotError(
+            raise LegalPilotError(
                 error_code=ErrorCodes.SERVICE_RUNTIME_ERROR,
-                detail=f"JobPilot service failed: {exc}",
+                detail=f"LegalPilot service failed: {exc}",
                 status_code=500,
             ) from exc
