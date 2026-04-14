@@ -79,7 +79,7 @@ class RouteDecision(BaseModel):
 class RagPlan(BaseModel):
     rewritten_queries: list[str] = Field(default_factory=list, description="재검색용 쿼리 목록")
     source_hint: str = Field(
-        default="", description="우선 확인할 문서/키워드 힌트(예: backend, data, pm)"
+        default="", description="우선 확인할 문서/키워드 힌트(예: 근로기준법, 포괄임금제, 임대차)"
     )
 
 
@@ -128,7 +128,7 @@ def heuristic_route_from_query(user_query: str) -> tuple[str, str] | None:
             return True
         return False
 
-    def _has_plan_only_marker_intent() -> bool:
+    def _has_advice_only_marker_intent() -> bool:
         if not _has_any(ADVICE_ONLY_MARKERS):
             return False
         plan_term_window = "|".join(re.escape(term) for term in EXCLUSION_TERMS["advice"] if term)
@@ -150,7 +150,7 @@ def heuristic_route_from_query(user_query: str) -> tuple[str, str] | None:
     want_interview = _has_any(INTENT_KEYWORDS["risk"])
     want_plan = _has_any(INTENT_KEYWORDS["advice"])
 
-    if _has_plan_only_marker_intent():
+    if _has_advice_only_marker_intent():
         return ("advice_only", "휴리스틱 라우팅: 수정 계획 전용 요청 키워드 감지")
     if _has_any(CLAUSE_ONLY_MARKERS) and not want_interview:
         return ("clause_only", "휴리스틱 라우팅: 조항 분석 전용/위험 제외 키워드 감지")
@@ -212,7 +212,7 @@ def _split_summary_sentences(text: str) -> list[str]:
     return sentences or [normalized]
 
 
-def _enforce_plan_only_summary(summary: str, max_chars: int = 140) -> str:
+def _enforce_advice_only_summary(summary: str, max_chars: int = 140) -> str:
     base = "요청에 따라 수정 계획 중심으로 핵심만 요약해 제공합니다."
     raw_text = str(summary or "")
     normalized = " ".join(raw_text.split()).strip()
@@ -308,7 +308,7 @@ def normalize_final_answer_by_route(route: str, answer: dict[str, Any]) -> dict[
     if _looks_notice_only(summary):
         summary = _attach_scope_notice(route_key, _compose_core_summary(route_key, answer))
     if route_key == "advice_only":
-        summary = _enforce_plan_only_summary(summary)
+        summary = _enforce_advice_only_summary(summary)
     payload = {
         "summary": summary,
         "clause_analysis": list(answer.get("clause_analysis", []) or []),

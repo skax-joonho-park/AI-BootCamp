@@ -4,7 +4,7 @@ LegalPilot AI는 법률 문서 검토를 위한 End-to-End 멀티 에이전트 �
 
 ## 실행/경로 규약
 
-- 모든 명령은 `AI-BootCamp` 루트를 현재 작업 디렉토리로 두고 실행합니다.
+- 모든 명령은 루트를 현재 작업 디렉토리로 두고 실행합니다.
 - 문서에 표시된 상대 경로(`scripts/...`, `data/...`, `docs/...`, `src/...`)는 모두 위 루트 기준입니다.
 
 ## 처음 실행 3단계
@@ -208,7 +208,7 @@ python scripts/run_streamlit.py
 ## 문제 해결 (Troubleshooting)
 
 - `ModuleNotFoundError: No module named 'src'`
-  - 반드시 `AI-BootCamp` 루트에서 실행하세요.
+  - 반드시 루트에서 실행하세요.
 - `Missing environment variables: AOAI_ENDPOINT`
   - `.env`와 필수 키를 확인하세요.
 - 지식 문서 업데이트 후 인덱스가 오래된 것 같을 때

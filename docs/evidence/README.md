@@ -18,7 +18,7 @@ LegalPilot AI — 법률 문서 검토 멀티 에이전트 최종 제출 증빙 
 
 ### 1) 에이전트 실행 로그/결과 JSON 자동 생성
 
-프로젝트 루트(`AI-BootCamp/`)에서:
+프로젝트 루트(`/`)에서:
 
 ```bash
 python scripts/generate_submission_evidence.py

@@ -4,7 +4,7 @@ CLI/FastAPI/Streamlit 통합 검증을 위한 제출용 체크리스트입니다
 
 ## 0) 사전 준비
 
-- [ ] 프로젝트 루트로 이동: `AI-BootCamp/`
+- [ ] 프로젝트 루트로 이동: `/`
 - [ ] 의존성 설치: `pip install -r requirements.txt`
 - [ ] `.env`에 필수 AOAI 설정값 입력
 - [ ] (선택) 저장/개인정보 관련 변수 확인: `UI_HISTORY_PERSIST_ENABLED`, `UI_HISTORY_PII_MASK`, `SESSION_MEMORY_PERSIST_ENABLED`, `SESSION_MEMORY_PII_MASK`

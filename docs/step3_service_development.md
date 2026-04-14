@@ -166,7 +166,6 @@ python scripts/evaluate_differentiation_metrics.py \
 ## 6) 파일 구조 요약
 
 ```
-AI-BootCamp/
 ├── main.py                          # CLI 진입점
 ├── requirements.txt                 # 의존성 (Python 3.12)
 ├── data/
