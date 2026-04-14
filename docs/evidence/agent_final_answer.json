@@ -1,7 +1,128 @@
 {
-  "summary": "",
-  "clause_analysis": [],
-  "risk_findings": [],
-  "revision_plan": [],
-  "references": []
+  "summary": "포괄임금제 조항은 근로시간 산정이 곤란한 업무에만 제한적으로 유효하며, 각 수당 항목과 금액을 명세화하지 않으면 무효 위험이 있습니다. 본 검토 의견은 법률 자문이 아니며, 실제 계약 체결 전 반드시 전문 법률가의 확인이 필요합니다.",
+  "clause_analysis": [
+    "포괄임금제 조항의 법령 기준 부합 여부를 검토했습니다. [1]",
+    "근로시간 산정이 곤란한 업무에만 제한적으로 유효합니다. [3]",
+    "각 수당 항목과 금액을 명세화하지 않으면 무효 위험이 있습니다. [3]",
+    "별도 포괄임금 동의서 작성이 권고됩니다. [3]"
+  ],
+  "risk_findings": [
+    "포괄임금제 조항이 근로기준법 제17조 및 제53조에 부합하지 않을 가능성이 있습니다. [2]",
+    "근로시간 산정이 곤란하지 않은 업무에 적용 시 무효 위험이 있습니다. [3]",
+    "각 수당 항목과 금액을 명세화하지 않은 경우 법적 분쟁 가능성이 있습니다. [3]",
+    "별도 동의서가 없는 경우 근로자 불이익 조항으로 판단될 수 있습니다. [3]"
+  ],
+  "revision_plan": [
+    "포괄임금제 조항을 근로시간 산정이 곤란한 업무에만 적용하도록 수정합니다. [3]",
+    "각 수당 항목과 금액을 명세화하여 법적 분쟁 가능성을 줄입니다. [3]",
+    "별도 포괄임금 동의서를 작성하여 근로자 동의를 명확히 합니다. [3]",
+    "전문 법률가의 검토를 통해 최종 문구를 확정합니다. [4]"
+  ],
+  "input_gap_notice": null,
+  "references": [
+    {
+      "rank": 1,
+      "source": "근로계약서_문제_예시.md",
+      "chunk_id": 42,
+      "location": "n/a",
+      "score": 1.0,
+      "category": "contract_examples",
+      "snippet": "## 예시 1: 포괄임금제 위험 조항",
+      "score_breakdown": {
+        "vector": 0.8183,
+        "bm25": 1.0,
+        "fused": 0.891,
+        "length_penalty": 1.0,
+        "final_pre_rerank": 0.891,
+        "rerank_role_boost": 0.15,
+        "rerank_category_boost": 0.0,
+        "rerank_lexical_boost": 0.05,
+        "rerank_upload_boost": 0.0,
+        "final_post_rerank_raw": 1.091,
+        "final_post_rerank": 1.0
+      },
+      "collected_at": null,
+      "source_url": null,
+      "curator": null,
+      "license": null
+    },
+    {
+      "rank": 2,
+      "source": "근로계약서_분쟁사례_가이드.md",
+      "chunk_id": 1,
+      "location": "n/a",
+      "score": 0.9931,
+      "category": "case_guides",
+      "snippet": "## 사례 1: 포괄임금제 무효 판결",
+      "score_breakdown": {
+        "vector": 0.8018,
+        "bm25": 0.78,
+        "fused": 0.7931,
+        "length_penalty": 1.0,
+        "final_pre_rerank": 0.7931,
+        "rerank_role_boost": 0.15,
+        "rerank_category_boost": 0.0,
+        "rerank_lexical_boost": 0.05,
+        "rerank_upload_boost": 0.0,
+        "final_post_rerank_raw": 0.9931,
+        "final_post_rerank": 0.9931
+      },
+      "collected_at": null,
+      "source_url": null,
+      "curator": null,
+      "license": null
+    },
+    {
+      "rank": 3,
+      "source": "근로계약서_분쟁사례_가이드.md",
+      "chunk_id": 4,
+      "location": "n/a",
+      "score": 0.97,
+      "category": "case_guides",
+      "snippet": "**실무 시사점** - 포괄임금제는 근로시간 산정이 곤란한 업무(영업직, 재택근무 등)에만 제한적 유효 - 포괄임금 내 각 수당 항목과 금액을 명세화하지 않으면 무효 위험 - 별도 포괄임금 동의서 작성 권고",
+      "score_breakdown": {
+        "vector": 0.8209,
+        "bm25": 0.6936,
+        "fused": 0.77,
+        "length_penalty": 1.0,
+        "final_pre_rerank": 0.77,
+        "rerank_role_boost": 0.15,
+        "rerank_category_boost": 0.0,
+        "rerank_lexical_boost": 0.05,
+        "rerank_upload_boost": 0.0,
+        "final_post_rerank_raw": 0.97,
+        "final_post_rerank": 0.97
+      },
+      "collected_at": null,
+      "source_url": null,
+      "curator": null,
+      "license": null
+    },
+    {
+      "rank": 4,
+      "source": "근로계약서_문제_예시.md",
+      "chunk_id": 41,
+      "location": "n/a",
+      "score": 0.9324,
+      "category": "contract_examples",
+      "snippet": "# 근로계약서 문제 조항 예시 및 수정 방향",
+      "score_breakdown": {
+        "vector": 0.804,
+        "bm25": 1.0,
+        "fused": 0.8824,
+        "length_penalty": 1.0,
+        "final_pre_rerank": 0.8824,
+        "rerank_role_boost": 0.0,
+        "rerank_category_boost": 0.0,
+        "rerank_lexical_boost": 0.05,
+        "rerank_upload_boost": 0.0,
+        "final_post_rerank_raw": 0.9324,
+        "final_post_rerank": 0.9324
+      },
+      "collected_at": null,
+      "source_url": null,
+      "curator": null,
+      "license": null
+    }
+  ]
 }

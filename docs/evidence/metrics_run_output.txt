@@ -1,12 +1,50 @@
 === Differentiation Metrics ===
 Cases: 25
 Case distribution: clause_only=5, risk_only=5, advice_only=5, full_review=5, ambiguous=5
-Routing accuracy: (재생성 필요 — scripts/evaluate_differentiation_metrics.py 실행)
-Reference inclusion rate: (재생성 필요)
-Plan quality rate (full_review/advice_only): (재생성 필요)
+Routing accuracy: 85.00%
+Reference inclusion rate: 100.00%
+Plan quality rate (full_review/advice_only): 100.00%
+Reference duplicate-source ratio: 17.00%
 
-이 파일은 LegalPilot 도메인 전환 후 아직 재실행되지 않았습니다.
-재생성 명령:
-  python scripts/evaluate_differentiation_metrics.py \
-    --cases data/eval/sample_queries.json \
-    --output docs/evidence/metrics_run_output.txt
+Routing confusion matrix (rows=expected, cols=predicted):
+expected\pred | advice_only | clause_only | full_review | risk_only
+--- | --- | --- | --- | ---
+advice_only | 5 | 0 | 0 | 0
+clause_only | 2 | 2 | 1 | 0
+full_review | 0 | 0 | 5 | 0
+risk_only | 0 | 0 | 0 | 5
+
+Route recall:
+- advice_only: 100.00% (5/5)
+- clause_only: 40.00% (2/5)
+- full_review: 100.00% (5/5)
+- risk_only: 100.00% (5/5)
+- macro_recall: 85.00%
+
+=== Case Details ===
+{"query": "조항 분석 포인트 5개만 뽑아줘. 위험 진단은 제외해줘.", "expected_route": "clause_only", "predicted_route": "clause_only", "eval_route": "clause_only", "references_count": 4, "plan_items_count": 0}
+{"query": "위험 조항과 법적 우려 사항만 알려줘.", "expected_route": "risk_only", "predicted_route": "risk_only", "eval_route": "risk_only", "references_count": 4, "plan_items_count": 0}
+{"query": "조항 분석과 위험 진단, 수정 계획까지 모두 검토해줘.", "expected_route": "full_review", "predicted_route": "full_review", "eval_route": "full_review", "references_count": 4, "plan_items_count": 4}
+{"query": "수정 계획만 간단히 작성해줘.", "expected_route": "advice_only", "predicted_route": "advice_only", "eval_route": "advice_only", "references_count": 2, "plan_items_count": 7}
+{"query": "위험도 보고 싶고 조항도 검토하고 싶은데, 수정 계획은 길지 않게 정리해줘.", "expected_route": "", "predicted_route": "full_review", "eval_route": "full_review", "references_count": 4, "plan_items_count": 4}
+{"query": "수정 방향과 핵심 조항을 2~3개씩 요약해줘.", "expected_route": "", "predicted_route": "full_review", "eval_route": "full_review", "references_count": 2, "plan_items_count": 4}
+{"query": "위험 조항은 제외하고 조항 분석과 수정 방향만 보여줘.", "expected_route": "clause_only", "predicted_route": "advice_only", "eval_route": "clause_only", "references_count": 2, "plan_items_count": 7}
+{"query": "조항 분석 제외하고 위험 조항과 법적 리스크만 집중 검토해줘.", "expected_route": "risk_only", "predicted_route": "risk_only", "eval_route": "risk_only", "references_count": 4, "plan_items_count": 0}
+{"query": "수정 계획만 우선 받고 싶어. 전체 요약은 짧게.", "expected_route": "advice_only", "predicted_route": "advice_only", "eval_route": "advice_only", "references_count": 2, "plan_items_count": 7}
+{"query": "조항 분석만 빠르게 해줘. 위험이랑 수정 계획은 제외해.", "expected_route": "clause_only", "predicted_route": "clause_only", "eval_route": "clause_only", "references_count": 4, "plan_items_count": 0}
+{"query": "위험 진단 준비만 하고 싶어. 조항 분석/수정 계획은 빼줘.", "expected_route": "risk_only", "predicted_route": "risk_only", "eval_route": "risk_only", "references_count": 4, "plan_items_count": 0}
+{"query": "수정 실행 계획만 우선 작성해줘.", "expected_route": "advice_only", "predicted_route": "advice_only", "eval_route": "advice_only", "references_count": 2, "plan_items_count": 7}
+{"query": "계약서 전반을 도와줘.", "expected_route": "", "predicted_route": "full_review", "eval_route": "full_review", "references_count": 2, "plan_items_count": 4}
+{"query": "무엇부터 해야 할지 모르겠어. 지금 계약에서 가장 급한 것만 정리해줘.", "expected_route": "", "predicted_route": "risk_only", "eval_route": "risk_only", "references_count": 4, "plan_items_count": 0}
+{"query": "조항 분석과 위험 리스크를 같이 검토하고 싶어.", "expected_route": "full_review", "predicted_route": "full_review", "eval_route": "full_review", "references_count": 4, "plan_items_count": 4}
+{"query": "위험 조항 제외하고 수정 방향 위주로만 정리해줘.", "expected_route": "clause_only", "predicted_route": "advice_only", "eval_route": "clause_only", "references_count": 2, "plan_items_count": 4}
+{"query": "조항 분석과 수정 계획은 제외하고 위험 조항/법적 우려만 핵심 5개 줘.", "expected_route": "risk_only", "predicted_route": "risk_only", "eval_route": "risk_only", "references_count": 4, "plan_items_count": 0}
+{"query": "전반적인 법률 검토 부탁해.", "expected_route": "", "predicted_route": "full_review", "eval_route": "full_review", "references_count": 4, "plan_items_count": 4}
+{"query": "위험 조항 제외 + 수정 계획만. 조항 분석은 보지 말아줘.", "expected_route": "advice_only", "predicted_route": "advice_only", "eval_route": "advice_only", "references_count": 2, "plan_items_count": 7}
+{"query": "조항 분석이랑 수정 계획은 빼고 위험 진단만 해줘.", "expected_route": "risk_only", "predicted_route": "risk_only", "eval_route": "risk_only", "references_count": 4, "plan_items_count": 0}
+{"query": "위험만 제외하고 나머지(조항+수정계획)는 진행해줘.", "expected_route": "clause_only", "predicted_route": "full_review", "eval_route": "clause_only", "references_count": 2, "plan_items_count": 4}
+{"query": "조항 분석과 위험 진단, 수정 계획까지 통합 검토해줘.", "expected_route": "full_review", "predicted_route": "full_review", "eval_route": "full_review", "references_count": 4, "plan_items_count": 6}
+{"query": "JD 대비 계약 문제와 개선점, 수정 계획까지 한 번에 정리해줘.", "expected_route": "full_review", "predicted_route": "full_review", "eval_route": "full_review", "references_count": 4, "plan_items_count": 4}
+{"query": "수정 계획만 우선 받고 싶어. 전체 요약은 짧게.", "expected_route": "advice_only", "predicted_route": "advice_only", "eval_route": "advice_only", "references_count": 2, "plan_items_count": 7}
+{"query": "공고 조항과 법령 기준으로 문제점, 위험 진단, 수정 계획까지 통합 검토해줘.", "expected_route": "full_review", "predicted_route": "full_review", "eval_route": "full_review", "references_count": 4, "plan_items_count": 4}
+[PASS] All thresholds satisfied.
