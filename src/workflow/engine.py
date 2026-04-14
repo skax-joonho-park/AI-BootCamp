@@ -870,6 +870,18 @@ def build_graph(retriever: HybridRetriever, memory: SessionMemory):
   2) 영구 유효기간은 계약법상 공서양속 위반 논란 가능
   3) 공개예외 조항(법령상 공개) 누락
 """.strip(),
+        "용역계약서": """
+[Few-shot 예시]
+입력:
+- 계약서 유형: 용역계약서
+- 계약서 요약: "검수 기준 불명확, 발주자 일방 해지 가능, 결과물 IP 귀속 미명시"
+출력 스타일:
+- 핵심 조항 진단:
+  1) 검수 기준·절차·기간 미명시로 납품 완료 여부 및 대금 지급 타이밍 분쟁 가능성
+  2) 발주자 일방 해지 조항 — 기 투입 비용·손해배상 기준 부재로 수급자 불이익
+  3) 결과물 지식재산권 귀속 조항 부재 — 저작권법 기본값(창작자 귀속)과 실무 기대 충돌
+  4) 하자 보수 기간·범위·책임 한도 미명시
+""".strip(),
     }
 
     risk_few_shot_defaults = {
@@ -897,6 +909,14 @@ def build_graph(retriever: HybridRetriever, memory: SessionMemory):
 - 법적 우려: 영업 자유 제한, 예측 불가능한 손해배상 리스크
 - 대응 방향: 비밀정보 범위 구체화, 손해배상 상한 설정
 """.strip(),
+        "용역계약서": """
+[Few-shot 예시]
+입력: 용역계약서 위험 조항 검토
+출력 스타일:
+- 위험 조항: 검수 기준 불명확 + 발주자 일방 해지 + IP 귀속 미명시
+- 법적 우려: 용역 대금 미지급 리스크, 기성 정산 근거 부재, 결과물 재활용 불가
+- 대응 방향: 검수 절차 명문화, 해지 시 기성 대금 정산 조항 추가, IP 귀속 및 라이선스 범위 명시
+""".strip(),
     }
 
     few_shot_dir = Path(__file__).resolve().parents[2] / "data" / "prompts" / "few_shots"
@@ -917,6 +937,8 @@ def build_graph(retriever: HybridRetriever, memory: SessionMemory):
             return "임대차계약서"
         if "nda" in dtype or "비밀" in dtype or "기밀" in dtype:
             return "nda"
+        if "용역" in dtype or "도급" in dtype or "위탁" in dtype:
+            return "용역계약서"
         return "근로계약서"
 
     def _select_few_shots(bank: dict[str, str], document_type: str) -> str:
