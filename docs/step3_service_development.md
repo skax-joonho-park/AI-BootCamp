@@ -25,8 +25,8 @@
 
 ## 2-1) 구조도/플로우 산출물
 
-- 아키텍처 다이어그램: `docs/images/system_architecture.md` (Mermaid)
-- 서비스 플로우 다이어그램: `docs/images/service_flow_sequence.md` (Mermaid)
+- 아키텍처 다이어그램: `docs/images/system_architecture.png` / `docs/images/system_architecture.md` (Mermaid 소스)
+- 서비스 플로우 다이어그램: `docs/images/service_flow_sequence.png` / `docs/images/service_flow_sequence.md` (Mermaid 소스)
 - E2E 테스트 체크리스트: `docs/evidence/e2e_test_checklist.md`
 - 실행 증빙 로그: `docs/evidence/agent_execution_log.md`
 - 최종 응답 JSON: `docs/evidence/agent_final_answer.json`
